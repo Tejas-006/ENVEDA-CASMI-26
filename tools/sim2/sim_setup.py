@@ -147,6 +147,25 @@ if FILTER_TRAIN_STRUCTS:
         STRUCT_FILTER = f'NOT filtered: columns {list(_ts.columns)[:12]}, rows {len(_ts)} vs fp {len(_tf)}'
     del _ts, _tf
 
+# engine 2 builds its pool from the train file it's given (COCONUT never contains train compounds), so class-2
+# truths would vanish from its pool while the v1 engine's prebuilt pool keeps them. Give engine 2 the held-out
+# structures as pool candidates only (no spectra), like a hidden-test compound that's in the pool.
+_extra = [[ik, s] for ik, s, c in zip(QUERIES.inchikey14, QUERIES.smiles, QUERIES.sim_class) if c == 2]
+json.dump(_extra, open('/tmp/sim2_extra_structs.json', 'w'))
+open('/tmp/sim2_eng_patch.py', 'w').write('''
+_sim2_orig_bp = E.build_pool
+def _sim2_bp(L, workers):
+    import json as _j
+    ex = _j.load(open("/tmp/sim2_extra_structs.json"))
+    L2 = dict(L)
+    L2["ik"] = np.concatenate([np.asarray(L["ik"], dtype=object), np.asarray([e[0] for e in ex], dtype=object)])
+    L2["smi"] = np.concatenate([np.asarray(L["smi"], dtype=object), np.asarray([e[1] for e in ex], dtype=object)])
+    print("sim2: engine-2 pool gets", len(ex), "held-out structures (no spectra)", flush=True)
+    return _sim2_orig_bp(L2, workers)
+E.build_pool = _sim2_bp
+''')
+os.environ['SIM2_ENG_PATCH'] = '/tmp/sim2_eng_patch.py'
+
 SIMD, SIM_NAMES = {}, None
 
 

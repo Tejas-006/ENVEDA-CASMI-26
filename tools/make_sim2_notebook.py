@@ -12,6 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SIM_DIR = os.path.join(HERE, 'sim2')
 
 SMOKE_MARK = '# SMOKE switch'
+ENG_MARK = '# Our engine (two-ranker'
 CELL6_MARK = '# all molecules -> base lists'
 CELL6_SCORE = 'score = rank_score(np.concatenate([X, F], 1), list(FEATURES) + list(names))'
 CELL8_MARK = '# gated PubChem merge'
@@ -43,6 +44,16 @@ def patch_cell6(src):
     return ''.join(lines)
 
 
+ENG_HOOK = 'E.find = _find\\n'
+ENG_HOOK_NEW = ENG_HOOK + '    if os.environ.get("SIM2_ENG_PATCH"): exec(open(os.environ["SIM2_ENG_PATCH"]).read())\\n'
+
+
+def patch_engine2(src):
+    # the engine-2 runner is a string literal in this cell: hook a patch file in right after its find() override
+    assert src.count(ENG_HOOK) == 1, 'engine-2 runner hook point not found'
+    return src.replace(ENG_HOOK, ENG_HOOK_NEW)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('baseline')
@@ -59,6 +70,9 @@ def main():
 
     setup = read('sim_setup.py').replace('SHARD, SHARD_SIZE = 0, 500', f'SHARD, SHARD_SIZE = {a.shard}, {a.size}')
     cells[find_cell(cells, SMOKE_MARK)] = code_cell(setup)
+
+    i2 = find_cell(cells, ENG_MARK)
+    cells[i2] = code_cell(patch_engine2(''.join(cells[i2]['source'])))
 
     i6 = find_cell(cells, CELL6_MARK)
     cells[i6] = code_cell(patch_cell6(''.join(cells[i6]['source'])))
