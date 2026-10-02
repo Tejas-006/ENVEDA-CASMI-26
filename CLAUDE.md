@@ -33,6 +33,29 @@ Every model, dataset, feature and commit must comply. If something is unclear, s
   undocumented weights.
 - Keep MANIFEST.json-style hashes for every file the Kaggle notebook loads.
 
+## Validation gate: every replacement or addition is tested on sim1x before it ships
+
+sim1x = the v1-engine simulation: training molecules held out as pseudo-queries, run through the engine,
+candidates labelled by InChIKey-14 match. It's derived Competition Data: keep it out of git (see .gitignore).
+
+Protocol, for each change (new feature, model swap, fusion or gate change, constant change):
+1. **Baseline first.** Reproduce the current pipeline's sim1x score before changing anything; record it.
+2. **Same metric as Kaggle.** MRR@25 with RDKit tautomer canonicalization and InChIKey-14 matching. Also
+   report top-1, top-5 and recall@25, overall and split by query class (class-1 = in library,
+   class-2 = analog only, and any others present).
+3. **No in-sample scores.** The ranker was trained on sim1x, so evaluate with GroupKFold by molecule
+   (retrain ranker/stacker per fold). Tune constants on folds, never on the reported fold.
+4. **One change at a time.** Ablate it: baseline vs baseline + change, same folds and seeds.
+5. **Significance.** Paired bootstrap over molecules (≥1000 resamples); report ΔMRR with a 95% CI.
+   Ship only if the CI lower bound is > 0, or if it's ~neutral on MRR and buys runtime or robustness
+   (say which).
+6. **Budget check.** Report added runtime per molecule and confirm the full hidden-test run stays inside
+   the Kaggle time limit.
+7. **Log it.** Append a row to `EXPERIMENTS.md`: date, change, commit, ΔMRR [CI], per-class Δ, runtime,
+   decision. Public LB score goes there too, but only as a secondary check.
+
+If sim1x isn't available in the session, don't ship the change: say so and ask the user for it.
+
 ### Leakage hygiene (validation integrity, not a rule, but required)
 - Deduplicate external spectra (e.g. MassSpecGym) against Competition Data by InChIKey-14 before using them for
   validation.
