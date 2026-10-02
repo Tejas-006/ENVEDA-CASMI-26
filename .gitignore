@@ -19,3 +19,6 @@ eng_lists.json
 pc_lists.json
 ice_work/
 gl_work/
+
+# Notebooks contain the full solution code; this repo is public
+*.ipynb

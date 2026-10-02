@@ -35,17 +35,26 @@ Code goes in `notebooks/` in this repo; data and outputs never do (rules section
 3. Confirm `casmi26-v4b-models`, `casmi26-v3-models`, the pool and other input datasets are **Private**.
 
 ### Step 1: N1, sim2 shard 1 (start first, runs in the background)
-1. Import `notebooks/casmi26-sim2-build.ipynb`. Attach the same inputs as the 0.401 notebook.
-2. Set `SHARD = 0` (500 queries, fold 0). Save & Run All (Commit).
-3. When done: Output → New Dataset `casmi26-sim2` (Private).
-4. Later shards: set `SHARD = 1, 2, ...`, commit, and add each output as a new version of `casmi26-sim2`.
+1. Generate the notebook (Claude does this; it's never committed because it contains the baseline code):
+   `python tools/make_sim2_notebook.py baseline.ipynb casmi26-sim2-build.ipynb --shard 0 --size 500`
+2. Kaggle → open the 0.401 baseline notebook → **Copy & Edit** (keeps every input attached) →
+   File → Import Notebook → upload `casmi26-sim2-build.ipynb`. GPU on.
+3. **Timing test:** in the "sim2 setup" cell set `SHARD_SIZE = 20` and Run All interactively. Check the summary printed
+   at the end and note `secs`.
+4. **Real run:** set `SHARD_SIZE` back to 500 (lower it if the timing test projects more than ~11 h), then
+   Save Version → Save & Run All (Commit).
+5. When done: Output → New Dataset `casmi26-sim2` (**Private**). Paste `summary.json` into the chat.
+6. Later shards: regenerate with `--shard 1, 2, ...` (or edit `SHARD`), commit, and add each output as a new version.
 
-How it works: a fixed scaffold-grouped split (saved with a seed, so every shard agrees) picks held-out training molecules,
-over-sampling natural-product-like ones. Each shard rebuilds the reference library without its held-out
-molecules (class-2 queries) or without only the query spectrum (class-1 queries), runs pipeline cells 4–8,
-and saves per-candidate rows: features, ranker score, ICEBERG/GLACIER scores, PubChem gate inputs,
-label (InChIKey-14 match), class and fold.
-Known bias: FPNet saw these training spectra; comparisons are fair-ish, absolute scores are optimistic.
+How it works: queries are training compounds that are also in COCONUT/ChEBI/LIPID MAPS (natural products, so the
+true structure stays in the candidate pool), timsTOF spectra preferred. A fixed seed orders them, so shards never
+overlap. Class 1 (~30% of eligible) holds out one instrument's spectra and keeps the rest in the library;
+class 2 removes the compound from the library and from train_structs/train_fp_sel. The unchanged pipeline then
+runs, and `sim_out/` gets queries, top-300 candidate feature rows with labels, pre/post ICE+GL lists, engine and
+PubChem lists, both submissions and a quick MRR summary.
+Known biases (absolute scores optimistic, comparisons fair-ish): FPNet, the fe_v4 priors and the engine-2 ranker
+rows were built from training data that includes these compounds; the pool keeps truths via COCONUT, so the
+PubChem-only case isn't simulated.
 
 ### Step 2: N3, MSAlign heads (while shard 1 runs)
 1. Import `notebooks/casmi26-msalign-train.ipynb`. Attach competition data, `casmi26-dreams-weights`, `casmi26-chemberta`.
