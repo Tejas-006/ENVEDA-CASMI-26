@@ -1,0 +1,21 @@
+# Competition Data and anything derived from it must never be committed (Rules section 4b)
+*.parquet
+*.csv
+*.npy
+*.npz
+*.pkl
+*.pt
+*.ckpt
+*.mgf
+*.msp
+*.mzML
+*.json.gz
+work/
+data/
+input/
+kaggle_input/
+submission*.csv
+eng_lists.json
+pc_lists.json
+ice_work/
+gl_work/
