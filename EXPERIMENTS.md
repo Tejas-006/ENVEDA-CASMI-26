@@ -15,7 +15,7 @@ Combined target: ~0.43–0.46 public LB.
 
 | # | Ver | Change | Why / projected effect | Needs sim2? | Status |
 |---|---|---|---|---|---|
-| 0 | v5a | Build sim2 inside Kaggle (scaffold hold-out, over-sample natural-product-like molecules, a few hundred queries to start) and score the current pipeline on it unchanged | Replaces lost sim1x; baseline's sim score for all later comparisons; LB stays 0.401 | builds it | next: harness notebook |
+| 0 | v5a | Build sim2 inside Kaggle (notebooks: see NOTEBOOKS.md) (scaffold hold-out, over-sample natural-product-like molecules, a few hundred queries to start) and score the current pipeline on it unchanged | Replaces lost sim1x; baseline's sim score for all later comparisons; LB stays 0.401 | builds it | next: harness notebook |
 | 1 | v5c | Learned stacker replacing ICE_LAM/GL_LAM/ALPHA/KRR and the PubChem gate (LIB_TAU/REL_TH/slots) | Removes ~8 LB-tuned constants: biggest generalization fix; per-molecule weighting for later signals; +0.005–0.02 | yes | planned |
 | 2 | v5b | MSAlign-style contrastive score (frozen DreaMS + ChemBERTa, trained MLP heads) as ranker feature + re-rank term | Ranks candidates directly, should lift top-1 among same-formula isomers; external pretraining helps generalization; +0.01–0.03 | yes | planned |
 | 3 | v5d | Swap ICEBERG → MARASON (retrieval-augmented ICEBERG) | Stronger isomer re-scoring (18.7%→27.8% top-1 in paper); +0.01–0.02, if code/weights available | optional | planned |
