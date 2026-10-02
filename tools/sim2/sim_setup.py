@@ -36,7 +36,7 @@ def _inst(x):
 IS_RERUN = True
 REAL_COMP = COMP
 SIM_OUT = '/kaggle/working/sim_out'; os.makedirs(SIM_OUT, exist_ok=True)
-SM = '/kaggle/working/sim_comp'; os.makedirs(SM, exist_ok=True)
+SM = '/tmp/sim_comp'; os.makedirs(SM, exist_ok=True)   # outside /kaggle/working: not saved as output
 TEST_SCHEMA = pq.read_schema(os.path.join(REAL_COMP, 'test.parquet'))
 TR_PATH = os.path.join(REAL_COMP, 'train.parquet')
 
@@ -45,18 +45,31 @@ meta['row'] = np.arange(len(meta))
 meta['inst'] = [_inst(x) for x in meta.instrument_type]
 meta = meta.dropna(subset=['inchikey14', 'normalized_smiles'])
 
+def _k14(k):
+    if isinstance(k, (bytes, np.bytes_)):
+        k = k.decode('ascii', 'ignore')
+    return str(k).strip().upper()[:14]
+
+
+meta['inchikey14'] = [_k14(k) for k in meta.inchikey14]
 NP_KEYS = set()
 for _f in ['coco_meta.pkl', 'bio_meta.pkl']:
     try:
-        NP_KEYS |= set(pickle.load(open(find(_f), 'rb'))['keys'])
+        _raw = list(pickle.load(open(find(_f), 'rb'))['keys'])
+        print(f'{_f}: {len(_raw):,} keys, e.g. {[repr(x) for x in _raw[:3]]}')
+        NP_KEYS |= {_k14(k) for k in _raw if k is not None}
     except Exception as e:
         print('natural-product key set: could not load', _f, repr(e))
+print('train inchikey14 e.g.', list(meta.inchikey14.head(3)))
 comp = meta.groupby('inchikey14').agg(smiles=('normalized_smiles', 'first'), n=('row', 'size'),
                                       n_inst=('inst', 'nunique')).reset_index()
 comp['has_tims'] = comp.inchikey14.isin(set(meta.inchikey14[meta.inst == 'timstof']))
-elig = comp[comp.inchikey14.isin(NP_KEYS)] if NP_KEYS else comp
-print(f'train: {len(meta):,} spectra / {len(comp):,} compounds; eligible natural products: {len(elig):,}'
-      + ('' if NP_KEYS else '  (NO natural-product set found -> all compounds eligible)'))
+elig = comp[comp.inchikey14.isin(NP_KEYS)]
+NP_FILTER = f'{len(elig):,} of {len(comp):,} train compounds are in COCONUT/ChEBI/LIPID MAPS'
+if len(elig) < max(SHARD_SIZE, 1000):
+    NP_FILTER += ' -> TOO FEW, falling back to ALL compounds (truth may be missing from engine-2 pool)'
+    elig = comp
+print(f'train: {len(meta):,} spectra / {len(comp):,} compounds; {NP_FILTER}')
 
 rng = np.random.default_rng(SEED)
 w = 1.0 + 2.0 * elig.has_tims.values
@@ -86,11 +99,25 @@ TRUTH = {m: {k for k in (t, ik) if k} for m, t, ik in zip(QUERIES.molecule_id, Q
 TRUTH_KEY = dict(zip(QUERIES.molecule_id, QUERIES.truth_key))
 CLASS2_IKS = set(QUERIES.inchikey14[QUERIES.sim_class == 2])
 
-_tbl = pq.read_table(TR_PATH)
-keep = np.ones(_tbl.num_rows, bool); keep[list(drop_rows)] = False
-pq.write_table(_tbl.filter(pa.array(keep)), os.path.join(SM, 'train.parquet'), row_group_size=50_000)
-_qt = _tbl.take(pa.array([x for x, _ in q_rows])).to_pandas()
-del _tbl
+# stream the (multi-GB) train file row group by row group: filtered copy for the library + the query rows
+_pf = pq.ParquetFile(TR_PATH)
+_drop = np.zeros(_pf.metadata.num_rows, bool); _drop[list(drop_rows)] = True
+_qpos = {x: i for i, (x, _) in enumerate(q_rows)}
+_writer, _qparts, _off = None, [], 0
+for _g in range(_pf.num_row_groups):
+    _t = _pf.read_row_group(_g)
+    _n = _t.num_rows
+    _w = _writer or pq.ParquetWriter(os.path.join(SM, 'train.parquet'), _t.schema)
+    _writer = _w
+    _w.write_table(_t.filter(pa.array(~_drop[_off:_off + _n])))
+    _loc = [x - _off for x in _qpos if _off <= x < _off + _n]
+    if _loc:
+        _qparts.append(_t.take(pa.array(_loc)).to_pandas().assign(_grow=[x + _off for x in _loc]))
+    _off += _n
+    del _t
+_writer.close()
+_qt = pd.concat(_qparts, ignore_index=True)
+_qt = _qt.iloc[np.argsort([_qpos[x] for x in _qt._grow])].drop(columns='_grow').reset_index(drop=True)
 _qt['molecule_id'] = [m for _, m in q_rows]
 if 'spectrum_id' in TEST_SCHEMA.names:
     _qt['spectrum_id'] = [f'sim{SHARD}_{i}' for i in range(len(_qt))] if not int_ids else \

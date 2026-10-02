@@ -40,7 +40,7 @@ def _rr(sub_path):
 
 _q = QUERIES.set_index('molecule_id')
 summary = dict(shard=SHARD, n_queries=len(QUERIES), secs=round(time.time() - T0), n_errors=n_err,
-               train_structs=STRUCT_FILTER, ice_stats=ice_stats, gl_stats=gl_stats,
+               train_structs=STRUCT_FILTER, np_filter=NP_FILTER, ice_stats=ice_stats, gl_stats=gl_stats,
                cand_recall=float(np.mean([SIMD[m]['y'].any() for m in _mids])) if _mids else None)
 for _name, _p in [('v4_pre_fusion', 'sub_v4.csv'), ('final', 'sub_final.csv')]:
     rr = pd.Series(_rr(os.path.join(SIM_OUT, _p)))
