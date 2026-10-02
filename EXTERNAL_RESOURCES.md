@@ -13,3 +13,24 @@ Each must be public and free to all participants. "TODO" items are unverified: f
 | prvsiyan public Kaggle notebook (2026-09-16) | TODO notebook URL | 2026-09-16 | TODO (Kaggle notebook licence) | Analog-propagation engine components |
 | ChemBERTa (planned) | https://huggingface.co/seyonec | TODO | MIT | Molecule encoder for contrastive alignment |
 | MassSpecGym (planned) | https://huggingface.co/datasets/roman-bushuiev/MassSpecGym | TODO | MIT | Extra training spectra (dedupe vs. Competition Data) |
+
+## Kaggle inputs of the 0.401 baseline (public datasets by other participants; from kernel-metadata.json)
+
+The baseline is a fork of a public notebook; its inputs are public Kaggle datasets. TODO: record each dataset's licence (dataset page → Licence).
+
+| Kaggle dataset | Used for |
+|---|---|
+| ahmedberatozer/casmi26-v4b-models | v1 engine code, fe_v4 models, LightGBM ranker, MANIFEST.json |
+| ahmedberatozer/casmi26-v3-models | PubChem channel code + FPNet A+B |
+| ahmedberatozer/casmi26-v2-pool | Candidate pool (train ∪ COCONUT) and train-structure tables |
+| ahmedberatozer/casmi26-pubchem-tier | PubChem SMILES/fingerprints for the PubChem channel |
+| ahmedberatozer/casmi26-iceberg | ICEBERG re-scoring package |
+| ahmedberatozer/casmi26-glacier | GLACIER re-scoring package |
+| ahmedberatozer/casmi26-fpnet-full1 | Engine FPNet bank (fpnet_full1.pt) |
+| prvsiyan/casmi26-fp-models-v2 | Engine-2 fingerprint models |
+| prvsiyan/casmi26-ranker-features | Engine-2 ranker training rows (rank_train.npz) |
+| prvsiyan/coconut-casmi26-candidates | COCONUT 2.0 candidates + fingerprints |
+| prvsiyan/chebi-lipidmaps-casmi26 | ChEBI + LIPID MAPS candidates |
+| megayak/casmi26-simulated-ranker-rows | Engine-2 simulation rows (sim_rank_rows_nofp.npz) |
+| dmitriigluzdov/casmi26-pubchem-popularity-prior | PubChem popularity prior |
+| metric/rdkit-2026-3-3-wheel | RDKit 2026.3.3 wheel |
