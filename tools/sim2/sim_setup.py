@@ -4,7 +4,7 @@
 #   class 1 = query spectra from one instrument; the compound's other spectra stay in the library
 #   class 2 = every spectrum of the compound is removed from the library
 SHARD, SHARD_SIZE = 0, 500
-CLASS1_FRAC, MAX_SPEC, SEED, SIM_TOPK, FILTER_TRAIN_STRUCTS = 0.3, 10, 2026, 300, True
+CLASS1_FRAC, MAX_SPEC, SEED, SIM_TOPK, FILTER_TRAIN_STRUCTS = 0.3, 10, 2026, 300, False   # True breaks the v1 Library: its spectrum cache indexes train_structs rows by position
 import zlib, pickle, json
 import numpy as np, pandas as pd, pyarrow as pa, pyarrow.parquet as pq
 from rdkit import Chem, RDLogger
@@ -182,8 +182,9 @@ _orig_sp_run = _sp.run
 
 
 def _sim2_run(cmd, *a, capture_output=False, timeout=None, check=False, **kw):
-    if not capture_output:
-        return _orig_sp_run(cmd, *a, timeout=timeout, check=check, **kw)
+    is_py = isinstance(cmd, (list, tuple)) and len(cmd) > 1 and 'python' in os.path.basename(str(cmd[0]))
+    if not (capture_output and is_py):
+        return _orig_sp_run(cmd, *a, capture_output=capture_output, timeout=timeout, check=check, **kw)
     text = kw.pop('text', False) or kw.pop('universal_newlines', False)
     name = os.path.basename(str(cmd[1] if isinstance(cmd, (list, tuple)) and len(cmd) > 1 else cmd))[:60]
     t0 = time.time()
