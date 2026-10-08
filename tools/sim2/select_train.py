@@ -1,0 +1,126 @@
+# sim2 question picker: held-out TRAINING compounds (models may have memorised them: optimistic)
+meta = pq.read_table(TR_PATH, columns=['inchikey14', 'normalized_smiles', 'instrument_type', 'adduct',
+                                       'ionization_mode', 'precursor_mz', 'molecular_formula']).to_pandas()
+meta['row'] = np.arange(len(meta))
+meta['inst'] = [_inst(x) for x in meta.instrument_type]
+meta = meta.dropna(subset=['inchikey14', 'normalized_smiles'])
+
+
+
+meta['inchikey14'] = [_k14(k) for k in meta.inchikey14]
+NP_KEYS = set()
+for _f in ['coco_meta.pkl', 'bio_meta.pkl']:
+    try:
+        _raw = list(pickle.load(open(find(_f), 'rb'))['keys'])
+        print(f'{_f}: {len(_raw):,} keys, e.g. {[repr(x) for x in _raw[:3]]}')
+        NP_KEYS |= {_k14(k) for k in _raw if k is not None}
+    except Exception as e:
+        print('natural-product key set: could not load', _f, repr(e))
+print('train inchikey14 e.g.', list(meta.inchikey14.head(3)))
+comp = meta.groupby('inchikey14').agg(smiles=('normalized_smiles', 'first'), n=('row', 'size'),
+                                      n_inst=('inst', 'nunique')).reset_index()
+comp['has_tims'] = comp.inchikey14.isin(set(meta.inchikey14[meta.inst == 'timstof']))
+elig = comp[comp.inchikey14.isin(NP_KEYS)]
+NP_FILTER = f'{len(elig):,} of {len(comp):,} train compounds are in COCONUT/ChEBI/LIPID MAPS'
+if len(elig) < max(SHARD_SIZE, 1000):
+    NP_FILTER += ' -> TOO FEW, falling back to ALL compounds (truth may be missing from engine-2 pool)'
+    elig = comp
+print(f'train: {len(meta):,} spectra / {len(comp):,} compounds; {NP_FILTER}')
+
+rng = np.random.default_rng(SEED)
+w = 1.0 + 2.0 * elig.has_tims.values
+order = np.argsort(-(np.log(rng.random(len(elig))) / w), kind='stable')
+pick = elig.iloc[order[SHARD * SHARD_SIZE:(SHARD + 1) * SHARD_SIZE]].reset_index(drop=True)
+assert len(pick), f'shard {SHARD} is past the end of the eligible compounds'
+
+by_ik = {k: g for k, g in meta[meta.inchikey14.isin(set(pick.inchikey14))].groupby('inchikey14')}
+int_ids = pa.types.is_integer(TEST_SCHEMA.field('molecule_id').type)
+q_rows, drop_rows, qmeta = [], set(), []
+for qi, r in pick.iterrows():
+    g = by_ik[r.inchikey14]
+    insts = g.inst.value_counts()
+    qinst = 'timstof' if 'timstof' in insts.index else insts.index[0]
+    cls = 1 if (r.n_inst >= 2 and (zlib.crc32(r.inchikey14.encode()) % 1000) / 1000 < CLASS1_FRAC) else 2
+    rows = g.row[g.inst == qinst].values
+    if len(rows) > MAX_SPEC:
+        rows = np.sort(np.random.default_rng(SEED + qi).choice(rows, MAX_SPEC, replace=False))
+    mid = 910_000_000 + SHARD * 100_000 + qi if int_ids else f'sim{SHARD}_{qi:05d}'
+    q_rows += [(int(x), mid) for x in rows]
+    drop_rows |= set(int(x) for x in (rows if cls == 1 else g.row.values))
+    qmeta.append(dict(molecule_id=mid, inchikey14=r.inchikey14, smiles=r.smiles, truth_key=metric_key(r.smiles),
+                      sim_class=cls, scaffold=scaffold_of(r.smiles), query_inst=qinst, n_spec=len(rows),
+                      adducts=';'.join(sorted(set(map(str, g.adduct[g.row.isin(rows)])))),
+                      ion_mode=str(g.ionization_mode.iloc[0]), precursor_mz=float(g.precursor_mz.median()),
+                      formula=str(g.molecular_formula.iloc[0]), n_lib_spectra=int(r.n),
+                      shard=SHARD))
+QUERIES = pd.DataFrame(qmeta)
+TRUTH = {m: {k for k in (t, ik) if k} for m, t, ik in zip(QUERIES.molecule_id, QUERIES.truth_key, QUERIES.inchikey14)}
+TRUTH_KEY = dict(zip(QUERIES.molecule_id, QUERIES.truth_key))
+CLASS2_IKS = set(QUERIES.inchikey14[QUERIES.sim_class == 2])
+
+# stream the (multi-GB) train file row group by row group: filtered copy for the library + the query rows
+_pf = pq.ParquetFile(TR_PATH)
+_drop = np.zeros(_pf.metadata.num_rows, bool); _drop[list(drop_rows)] = True
+_qpos = {x: i for i, (x, _) in enumerate(q_rows)}
+_writer, _qparts, _off = None, [], 0
+for _g in range(_pf.num_row_groups):
+    _t = _pf.read_row_group(_g)
+    _n = _t.num_rows
+    _w = _writer or pq.ParquetWriter(os.path.join(SM, 'train.parquet'), _t.schema)
+    _writer = _w
+    _w.write_table(_t.filter(pa.array(~_drop[_off:_off + _n])))
+    _loc = [x - _off for x in _qpos if _off <= x < _off + _n]
+    if _loc:
+        _qparts.append(_t.take(pa.array(_loc)).to_pandas().assign(_grow=[x + _off for x in _loc]))
+    _off += _n
+    del _t
+_writer.close()
+_qt = pd.concat(_qparts, ignore_index=True)
+_qt = _qt.iloc[np.argsort([_qpos[x] for x in _qt._grow])].drop(columns='_grow').reset_index(drop=True)
+_qt['molecule_id'] = [m for _, m in q_rows]
+if 'spectrum_id' in TEST_SCHEMA.names:
+    _qt['spectrum_id'] = [f'sim{SHARD}_{i}' for i in range(len(_qt))] if not int_ids else \
+        910_000_000 + SHARD * 100_000 * MAX_SPEC + np.arange(len(_qt))
+for c in TEST_SCHEMA.names:
+    if c not in _qt.columns:
+        print('WARNING test column missing from train, filled with None:', c); _qt[c] = None
+_qt[TEST_SCHEMA.names].to_parquet(os.path.join(SM, 'test.parquet'), index=False)
+_sc = pd.read_csv(os.path.join(REAL_COMP, 'sample_submission.csv'), nrows=1).columns
+pd.DataFrame({c: (QUERIES.molecule_id.values if c == 'molecule_id' else 'CCO') for c in _sc}).to_csv(
+    os.path.join(SM, 'sample_submission.csv'), index=False)
+QUERIES.to_parquet(os.path.join(SIM_OUT, 'queries.parquet'), index=False)
+
+# train_structs / train_fp_sel are row-aligned train-structure tables used by the v1 engine: drop class-2 compounds
+os.makedirs('work', exist_ok=True)
+STRUCT_FILTER = 'off'
+if FILTER_TRAIN_STRUCTS:
+    _ts = pd.read_parquet(os.path.join(POOL_DIR, 'train_structs.parquet'))
+    _tf = np.load(os.path.join(POOL_DIR, 'train_fp_sel.npy'), mmap_mode='r')
+    _kc = next((c for c in ['inchikey14', 'ik14', 'ik', 'key', 'inchikey'] if c in _ts.columns), None)
+    if _kc and len(_ts) == len(_tf):
+        _km = ~_ts[_kc].astype(str).str[:14].isin(CLASS2_IKS).values
+        _ts[_km].reset_index(drop=True).to_parquet('work/train_structs.parquet', index=False)
+        np.save('work/train_fp_sel.npy', np.asarray(_tf)[_km])
+        STRUCT_FILTER = f'removed {int((~_km).sum())} rows by column {_kc}'
+    else:
+        STRUCT_FILTER = f'NOT filtered: columns {list(_ts.columns)[:12]}, rows {len(_ts)} vs fp {len(_tf)}'
+    del _ts, _tf
+
+# engine 2 builds its pool from the train file it's given (COCONUT never contains train compounds), so class-2
+# truths would vanish from its pool while the v1 engine's prebuilt pool keeps them. Give engine 2 the held-out
+# structures as pool candidates only (no spectra), like a hidden-test compound that's in the pool.
+_extra = [[ik, s] for ik, s, c in zip(QUERIES.inchikey14, QUERIES.smiles, QUERIES.sim_class) if c == 2]
+json.dump(_extra, open('/tmp/sim2_extra_structs.json', 'w'))
+open('/tmp/sim2_eng_patch.py', 'w').write('''
+_sim2_orig_bp = E.build_pool
+def _sim2_bp(L, workers):
+    import json as _j
+    ex = _j.load(open("/tmp/sim2_extra_structs.json"))
+    L2 = dict(L)
+    L2["ik"] = np.concatenate([np.asarray(L["ik"], dtype=object), np.asarray([e[0] for e in ex], dtype=object)])
+    L2["smi"] = np.concatenate([np.asarray(L["smi"], dtype=object), np.asarray([e[1] for e in ex], dtype=object)])
+    print("sim2: engine-2 pool gets", len(ex), "held-out structures (no spectra)", flush=True)
+    return _sim2_orig_bp(L2, workers)
+E.build_pool = _sim2_bp
+''')
+os.environ['SIM2_ENG_PATCH'] = '/tmp/sim2_eng_patch.py'

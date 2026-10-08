@@ -49,6 +49,18 @@ for _name, _p in [('v4_pre_fusion', 'sub_v4.csv'), ('final', 'sub_final.csv')]:
     summary[_name] = dict(mrr=round(rr.mean(), 4), top1=round((rr == 1).mean(), 4),
                           top5=round((rr >= 0.2).mean(), 4), recall25=round((rr > 0).mean(), 4),
                           by_class={int(c): round(rr[cls == c].mean(), 4) for c in sorted(cls.dropna().unique())})
+    if 'in_pool' in _q.columns:
+        ip = _q.in_pool.reindex(rr.index).astype(bool)
+        summary[_name]['by_in_pool'] = {'in_pool': round(rr[ip].mean(), 4) if ip.any() else None,
+                                        'not_in_pool': round(rr[~ip].mean(), 4) if (~ip).any() else None}
+summary['source'] = SOURCE
+if 'in_pool' in _q.columns:
+    summary['truth_in_pool'] = round(float(_q.in_pool.mean()), 4)
 _js(summary, os.path.join(SIM_OUT, 'summary.json'))
 print(json.dumps(summary, indent=1, default=str))
 print('sim_out files:', sorted(os.listdir(SIM_OUT)))
+
+# keep the saved output small: drop helper installs/caches the pipeline leaves in /kaggle/working
+for _d in ['ice_site', 'eng', 'gl_work', 'ice_work', '__pycache__', 'numba_cache', 'work', 'smoke_comp']:
+    shutil.rmtree(os.path.join('/kaggle/working', _d), ignore_errors=True)
+print('kept outputs:', sorted(os.listdir('/kaggle/working')))

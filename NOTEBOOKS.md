@@ -79,3 +79,15 @@ PubChem-only case isn't simulated.
 
 ### Step 7: final selection
 - Pick 2 final submissions on Kaggle: best N5 version (LB) + best N6 version (sim2).
+
+## sim2 question source (update)
+
+The first sim2 runs used held-out *training* compounds and scored MRR ~0.97 against the 0.401 public LB: the
+pipeline's models were trained on those compounds. sim2 now draws questions from public MassSpecGym spectra of
+compounds that are not in the competition train set:
+1. `casmi26-massspecgym-download` (tools/make_msg_download_notebook.py; internet ON, CPU) -> Output -> New Dataset
+   `casmi26-massspecgym` (Private).
+2. `python tools/make_sim2_notebook.py baseline.ipynb out.ipynb --source external --shard N --size N`, then
+   `python tools/make_kaggle_push.py <baseline kernel-metadata.json> out.ipynb <dir> casmi26-sim2-build casmi26-sim2-build t3jas06/casmi26-massspecgym`.
+   The library stays the untouched train set; `in_pool` records whether the truth is in the candidate pool.
+
