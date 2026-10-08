@@ -18,6 +18,7 @@ if _mids:
                         n_all=np.array([SIMD[m]['n_all'] for m in _mids]), mols=np.array([str(m) for m in _mids]),
                         names=np.array(SIM_NAMES or []))
 _js({str(k): v for k, v in BASE0.items()}, os.path.join(SIM_OUT, 'base_pre_ice.json'))
+_js({str(k): v for k, v in BASE_POST_ICE.items()}, os.path.join(SIM_OUT, 'base_post_ice.json'))
 _js({str(k): v for k, v in (ICE_SCORES or {}).items()}, os.path.join(SIM_OUT, 'ice_scores.json'))
 _js({str(k): v for k, v in (GL_SCORES or {}).items()}, os.path.join(SIM_OUT, 'gl_scores.json'))
 for _f in ['eng_lists.json', 'pc_lists.json']:

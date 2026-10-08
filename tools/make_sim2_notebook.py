@@ -15,6 +15,7 @@ SMOKE_MARK = '# SMOKE switch'
 ENG_MARK = '# Our engine (two-ranker'
 CELL6_MARK = '# all molecules -> base lists'
 CELL6_SCORE = 'score = rank_score(np.concatenate([X, F], 1), list(FEATURES) + list(names))'
+CELL7_MARK = '# ICEBERG post-ranker'
 CELL8_MARK = '# gated PubChem merge'
 CELL9_MARK = 'ALPHA, KRR ='
 
@@ -77,6 +78,9 @@ def main():
     i6 = find_cell(cells, CELL6_MARK)
     cells[i6] = code_cell(patch_cell6(''.join(cells[i6]['source'])))
     cells.insert(i6 + 1, code_cell('import copy\nBASE0 = copy.deepcopy(BASE)   # sim2: ranker lists before ICEBERG/GLACIER\n'))
+
+    i7 = find_cell(cells, CELL7_MARK)
+    cells.insert(i7 + 1, code_cell('BASE_POST_ICE = copy.deepcopy(BASE)   # sim2: lists after ICEBERG/GLACIER, before the PubChem merge\n'))
 
     i8 = find_cell(cells, CELL8_MARK)
     cells.insert(i8 + 1, code_cell("import shutil\nshutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_v4.csv'))   # sim2: before final fusion\n"))

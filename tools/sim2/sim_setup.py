@@ -40,7 +40,8 @@ SM = '/tmp/sim_comp'; os.makedirs(SM, exist_ok=True)   # outside /kaggle/working
 TEST_SCHEMA = pq.read_schema(os.path.join(REAL_COMP, 'test.parquet'))
 TR_PATH = os.path.join(REAL_COMP, 'train.parquet')
 
-meta = pq.read_table(TR_PATH, columns=['inchikey14', 'normalized_smiles', 'instrument_type']).to_pandas()
+meta = pq.read_table(TR_PATH, columns=['inchikey14', 'normalized_smiles', 'instrument_type', 'adduct',
+                                       'ionization_mode', 'precursor_mz', 'molecular_formula']).to_pandas()
 meta['row'] = np.arange(len(meta))
 meta['inst'] = [_inst(x) for x in meta.instrument_type]
 meta = meta.dropna(subset=['inchikey14', 'normalized_smiles'])
@@ -93,6 +94,9 @@ for qi, r in pick.iterrows():
     drop_rows |= set(int(x) for x in (rows if cls == 1 else g.row.values))
     qmeta.append(dict(molecule_id=mid, inchikey14=r.inchikey14, smiles=r.smiles, truth_key=metric_key(r.smiles),
                       sim_class=cls, scaffold=scaffold_of(r.smiles), query_inst=qinst, n_spec=len(rows),
+                      adducts=';'.join(sorted(set(map(str, g.adduct[g.row.isin(rows)])))),
+                      ion_mode=str(g.ionization_mode.iloc[0]), precursor_mz=float(g.precursor_mz.median()),
+                      formula=str(g.molecular_formula.iloc[0]), n_lib_spectra=int(r.n),
                       shard=SHARD))
 QUERIES = pd.DataFrame(qmeta)
 TRUTH = {m: {k for k in (t, ik) if k} for m, t, ik in zip(QUERIES.molecule_id, QUERIES.truth_key, QUERIES.inchikey14)}
