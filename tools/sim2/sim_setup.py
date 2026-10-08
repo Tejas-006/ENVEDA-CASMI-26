@@ -170,6 +170,54 @@ E.build_pool = _sim2_bp
 ''')
 os.environ['SIM2_ENG_PATCH'] = '/tmp/sim2_eng_patch.py'
 
+# ICEBERG/GLACIER budgets are totals for the whole run: scale the submission's budgets to this shard's size
+# (5400 s / 4000 s were sized for a full test set; a 20-query test must not inherit them)
+ICE_BUDGET = int(max(120, 5400 * SHARD_SIZE / 500))
+SIM_GL_BUDGET = int(max(120, 4000 * SHARD_SIZE / 500))
+
+# Stream the helper processes (engine 2, PubChem channel, ICEBERG/GLACIER runners) into the log live, with
+# timestamps, instead of holding their output until they finish.
+import subprocess as _sp, threading as _th
+_orig_sp_run = _sp.run
+
+
+def _sim2_run(cmd, *a, capture_output=False, timeout=None, check=False, **kw):
+    if not capture_output:
+        return _orig_sp_run(cmd, *a, timeout=timeout, check=check, **kw)
+    text = kw.pop('text', False) or kw.pop('universal_newlines', False)
+    name = os.path.basename(str(cmd[1] if isinstance(cmd, (list, tuple)) and len(cmd) > 1 else cmd))[:60]
+    t0 = time.time()
+    print(f'[sim2] {time.time() - T0:7.0f}s START {name}', flush=True)
+    p = _sp.Popen(cmd, *a, stdout=_sp.PIPE, stderr=_sp.STDOUT, text=True, bufsize=1, **kw)
+    killer = _th.Timer(timeout, p.kill) if timeout else None
+    if killer:
+        killer.start()
+    out = []
+    try:
+        for line in p.stdout:
+            out.append(line)
+            print('    | ' + line, end='', flush=True)
+        p.wait()
+    finally:
+        if killer:
+            killer.cancel()
+    secs = time.time() - t0
+    print(f'[sim2] {time.time() - T0:7.0f}s END {name} after {secs:.0f}s, exit code {p.returncode}', flush=True)
+    if timeout and secs >= timeout:
+        raise _sp.TimeoutExpired(cmd, timeout)
+    if check and p.returncode:
+        raise _sp.CalledProcessError(p.returncode, cmd)
+    txt = ''.join(out)
+    return _sp.CompletedProcess(cmd, p.returncode, txt if text else txt.encode(), '' if text else b'')
+
+
+_sp.run = _sim2_run
+
+
+def sim2_mark(label):
+    print(f'[sim2] {time.time() - T0:7.0f}s STEP {label}', flush=True)
+
+
 SIMD, SIM_NAMES = {}, None
 
 

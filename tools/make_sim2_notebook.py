@@ -18,6 +18,7 @@ CELL6_SCORE = 'score = rank_score(np.concatenate([X, F], 1), list(FEATURES) + li
 CELL7_MARK = '# ICEBERG post-ranker'
 CELL8_MARK = '# gated PubChem merge'
 CELL9_MARK = 'ALPHA, KRR ='
+GL_BUDGET_LIT = ', 1.0, 4000'
 
 
 def code_cell(src):
@@ -42,7 +43,9 @@ def patch_cell6(src):
     i = hits[0]
     indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
     lines.insert(i + 1, f'{indent}_simdump(mid, C, np.concatenate([X, F], 1), list(FEATURES) + list(names), score)\n')
-    return ''.join(lines)
+    out = ''.join(lines)
+    assert out.count('(gi + 1) % 25 == 0') == 1, 'progress-print line not found in the base-list cell'
+    return out.replace('(gi + 1) % 25 == 0', '(gi + 1) % 5 == 0')
 
 
 ENG_HOOK = 'E.find = _find\\n'
@@ -86,7 +89,21 @@ def main():
     cells.insert(i8 + 1, code_cell("import shutil\nshutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_v4.csv'))   # sim2: before final fusion\n"))
 
     find_cell(cells, CELL9_MARK)
+    i7 = find_cell(cells, CELL7_MARK)
+    src7 = ''.join(cells[i7]['source'])
+    assert src7.count(GL_BUDGET_LIT) == 1, 'GLACIER budget literal not found'
+    cells[i7] = code_cell(src7.replace(GL_BUDGET_LIT, ', 1.0, SIM_GL_BUDGET'))
     cells.append(code_cell(read('sim_finish.py')))
+
+    # a timestamped progress line before every step after the setup cell, so a stalled run shows where it is
+    i_setup = find_cell(cells, '# sim2 setup')
+    out = cells[:i_setup + 1]
+    for c in cells[i_setup + 1:]:
+        if c['cell_type'] == 'code':
+            first = ''.join(c['source']).strip().splitlines()[0][:70].replace("'", '')
+            out.append(code_cell(f"sim2_mark('{first}')\n"))
+        out.append(c)
+    nb['cells'] = cells = out
 
     cells.insert(0, dict(cell_type='markdown', metadata={}, source=[
         f'# casmi26-sim2-build (shard {a.shard}, {a.size} queries)\n',
