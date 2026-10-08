@@ -12,7 +12,7 @@ Each must be public and free to all participants. "TODO" items are unverified: f
 | GLACIER (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | TODO version used by casmi26-glacier | MIT | Post-ranker re-scoring |
 | prvsiyan public Kaggle notebook (2026-09-16) | TODO notebook URL | 2026-09-16 | TODO (Kaggle notebook licence) | Analog-propagation engine components |
 | CMatch (ours) | tools/cmatch/ in this repo | trained by casmi26-cmatch-train | n/a (own code; trained only on Competition Data) | Contrastive spectrum↔molecule score |
-| MassSpecGym | https://huggingface.co/datasets/roman-bushuiev/MassSpecGym (downloaded by casmi26-massspecgym-download into private dataset casmi26-massspecgym) | HF revision recorded in SOURCE.json of that dataset | MIT | sim2 practice questions: only compounds NOT in competition train (inchikey14 + tautomer-key dedupe) |
+| MassSpecGym | https://huggingface.co/datasets/roman-bushuiev/MassSpecGym (downloaded by casmi26-massspecgym-download into private dataset casmi26-massspecgym) | HF revision d2e86d0c3bd905a6d578c0dd6053ed2bd41f9c2a, data/MassSpecGym.tsv (231,104 spectra, 28,929 compounds) | MIT | sim2 practice questions: only compounds NOT in competition train (inchikey14 + tautomer-key dedupe) |
 
 ## Kaggle inputs of the 0.401 baseline (public datasets by other participants; from kernel-metadata.json)
 
