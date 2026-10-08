@@ -22,3 +22,5 @@ gl_work/
 
 # Notebooks contain the full solution code; this repo is public
 *.ipynb
+__pycache__/
+*.pyc
