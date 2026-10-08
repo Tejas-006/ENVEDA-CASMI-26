@@ -7,11 +7,11 @@ Each must be public and free to all participants. "TODO" items are unverified: f
 | RDKit | https://www.rdkit.org | wheel in Kaggle input (TODO version) | BSD-3-Clause | Chemistry toolkit |
 | LightGBM | https://github.com/microsoft/LightGBM | TODO | MIT | Candidate ranker |
 | PubChem | https://pubchem.ncbi.nlm.nih.gov | TODO snapshot date | Public domain (NCBI) | PubChem candidate channel, popularity prior |
-| DreaMS | https://github.com/pluskal-lab/DreaMS, https://zenodo.org/records/10997887 | Zenodo 10997887 | TODO verify | DreamsFP feature views |
-| ICEBERG (ms-pred) | TODO source URL | TODO | TODO verify | Post-ranker isomer re-scoring |
-| GLACIER | TODO: external or our own? | TODO | TODO | Post-ranker re-scoring |
+| DreaMS | https://github.com/pluskal-lab/DreaMS, https://zenodo.org/records/10997887 | Zenodo 10997887 | MIT | DreamsFP feature views inside the baseline's fe_v4 (not used by our own code) |
+| ICEBERG (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | TODO version used by casmi26-iceberg | MIT | Post-ranker isomer re-scoring |
+| GLACIER (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | TODO version used by casmi26-glacier | MIT | Post-ranker re-scoring |
 | prvsiyan public Kaggle notebook (2026-09-16) | TODO notebook URL | 2026-09-16 | TODO (Kaggle notebook licence) | Analog-propagation engine components |
-| ChemBERTa (planned) | https://huggingface.co/seyonec | TODO | MIT | Molecule encoder for contrastive alignment |
+| CMatch (ours) | tools/cmatch/ in this repo | trained by casmi26-cmatch-train | n/a (own code; trained only on Competition Data) | Contrastive spectrum↔molecule score |
 | MassSpecGym (planned) | https://huggingface.co/datasets/roman-bushuiev/MassSpecGym | TODO | MIT | Extra training spectra (dedupe vs. Competition Data) |
 
 ## Kaggle inputs of the 0.401 baseline (public datasets by other participants; from kernel-metadata.json)
