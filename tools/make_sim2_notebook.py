@@ -73,6 +73,7 @@ def main():
     ap.add_argument('--shard', type=int, default=0)
     ap.add_argument('--size', type=int, default=500)
     ap.add_argument('--source', choices=['train', 'external'], default='external')
+    ap.add_argument('--cmatch', action='store_true', help='insert the CMatch re-rank after BASE0 (needs casmi26-cmatch)')
     a = ap.parse_args()
 
     nb = json.load(open(a.baseline))
@@ -90,6 +91,8 @@ def main():
     i6 = find_cell(cells, CELL6_MARK)
     cells[i6] = code_cell(patch_cell6(''.join(cells[i6]['source'])))
     cells.insert(i6 + 1, code_cell('import copy\nBASE0 = copy.deepcopy(BASE)   # sim2: ranker lists before ICEBERG/GLACIER\n'))
+    if a.cmatch:
+        cells.insert(i6 + 2, code_cell(open(os.path.join(HERE, 'lb', 'cmatch_rerank.py')).read()))
 
     i7 = find_cell(cells, CELL7_MARK)
     cells.insert(i7 + 1, code_cell('BASE_POST_ICE = copy.deepcopy(BASE)   # sim2: lists after ICEBERG/GLACIER, before the PubChem merge\n'))
