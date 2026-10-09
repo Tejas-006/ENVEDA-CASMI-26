@@ -30,3 +30,4 @@ Metric: MRR@25 (InChIKey-14), GroupKFold by molecule, paired bootstrap 95% CI vs
 | Date | Change | Commit | sim2 MRR (Δ [95% CI]) | Class-1 Δ | Class-2 Δ | Runtime Δ / mol | Public LB | Decision |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-02 | Baseline v4n (current submission) | n/a | TODO (v5a) | | | | 0.401 | reference |
+| 2026-10-09 | sim2 external pilot (MassSpecGym, 11 unseen q), baseline v4n unchanged | n/a | final MRR 0.322 (pre-fusion 0.238); top1 0.27, recall@25 0.55; truth in pool 73% | — | — | ~ | 0.401 | realistic (train-holdout gave 0.93); only 232 of 28,929 MassSpecGym compounds unseen → ~125 usable questions; running all next |
