@@ -54,6 +54,51 @@ Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (ar
 cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),
 MassKG (PMC11415640), MassSpecGym in the Wild (arXiv 2606.19624).
 
+## Post-CMatch plan: per-case experts, architecture changes, branching steps (2026-10-09)
+
+### Experts per failure case, stitched by a router
+| Case (pilot share) | Expert (research) | Availability |
+|---|---|---|
+| 1. Truth not in pool (~27%) | Generative proposals (MS-GPT formula-given, MARLIN formula-free, DiffMS/FlowMS) + generated NP library (MassKG-style) | MARLIN no code; others to check |
+| 2. In pool, outside top 25 (~18%) | Dense retrieval with a contrastive matcher over the whole mass window (FLARE, MSAlign, JESTR/MVP) | our CMatch / FLARE-style build |
+| 3. In top 25, not first (~28%) | Isomer experts: ICEBERG, GLACIER, FLARE peak-to-atom, new cross-encoder (MARASON: no weights) | partly in pipeline |
+
+Router (heuristic first, learned in step 9), generalising the existing PubChem gate:
+strong library match -> keep ranker order | big ranker margin -> light re-rank | close same-formula race -> full isomer
+experts | weak everything (low lib_max, low best CMatch cosine) -> generative + expanded-pool proposals in fixed slots.
+
+### Architecture changes
+| Change | Type | Basis |
+|---|---|---|
+| Fingerprint MLP -> GNN (GIN / graph transformer) molecule encoder | replace | JESTR, MVP, FLARE |
+| Global cosine -> late interaction (peak<->atom max-sim) | replace | FLARE |
+| Peak subformula-annotation tokens | add | MIST / MIST-CF |
+| Pairwise mass-difference attention bias | add | DreaMS, MassFormer |
+| Masked-peak self-supervised pretraining on 2.5M train spectra | add | DreaMS (own, dependency-free) |
+| Instrument embedding -> gradient-reversal instrument-adversarial layer | replace/remove | cross-instrument DG (arXiv 2602.00547) |
+| Cross-attention to nearest library spectra + structures | add | MARASON, MS2Query |
+| Auxiliary fingerprint/formula heads | add | MIST, multi-task |
+| Hard negatives mined from the pipeline's own top-25 lists | replace | retrieval practice |
+| Cross-encoder re-ranker (spectrum tokens x candidate graph tokens) on top 25 only | new | two-stage retrieval (GLMR-style) |
+
+### Steps
+| Step | Do | Decide by | If yes | If no | Cost |
+|---|---|---|---|---|---|
+| 1 | CMatch v1 results | val isomer MRR >= 0.30 | 2 | 1b | — |
+| 1b | Rebuild: GNN molecule encoder + masked-peak pretraining | val >= 0.30 | 2 | drop contrastive line -> 5 | ~12 GPU h |
+| 2 | Submit CMatch (v5-lb) | sim2 >= +0.01 and LB >= -0.02 | keep -> 3 | 2b | 1 submission |
+| 2b | CMatch as a whole-list term (judged on sim2 only, no LB tuning) | sim2 >= +0.01 | keep -> 3 | drop re-rank use; keep model for 4 | — |
+| 3 | Head-to-head v1.1 (instrument tricks + adversarial) vs v2 (FLARE-style) vs fusion | val isomer MRR, overall + timsTOF | submit winner if >= +0.02 val over v1 | keep v1 | ~9-12 GPU h each |
+| 4 | Dense retrieval: matcher top-K over whole mass window, union into candidates | sim2 recall@25 +3 pts; runtime <= +20 min | keep -> 5 | drop | ~1 day code |
+| 5 | Pool expansion: generated NP library | truth-in-pool +5 pts; sim2 not worse | keep -> 6 | 2nd try other generator -> 6 | GPU h |
+| 6 | Router v1 (heuristic) | sim2 >= +0.01 or same score, less runtime | keep -> 7 | always-on flow | small |
+| 7 | Generative proposals for likely-not-in-pool molecules | START if not-in-pool >= 20% after 5, or 3 and 4 each < +0.01. KEEP if >= +0.015 and <= 1.5 h | keep -> 8 | drop | public-weights model needed |
+| 8 | Cross-encoder re-ranker on top 25 | sim2 >= +0.01; runtime <= +45 min | keep -> 9 | drop | ~12 GPU h |
+| 9 | Learned stacker + router (E) | >= 500 unseen questions, then sim2 >= +0.01 | keep | heuristic router | data |
+| 10 | Final picks: LB-best + sim2-best | — | — | — | — |
+
+Runtime rule: total <= ~8.5 h (now ~6.5 h); if a step doesn't fit, the router skips ICEBERG/GLACIER on solved molecules first.
+
 ## Results
 
 Metric: MRR@25 (InChIKey-14), GroupKFold by molecule, paired bootstrap 95% CI vs the baseline.
