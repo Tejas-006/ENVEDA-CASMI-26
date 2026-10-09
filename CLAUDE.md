@@ -26,6 +26,12 @@ Every model, dataset, feature and commit must comply. If something is unclear, s
   resource; a host prohibition overrides everything else.
 - AutoML tools only with a licence that permits compliance (section 6c).
 
+### Code-competition limits (from public write-ups; confirm on the Overview → Code Requirements tab)
+- Scored notebook: internet OFF, must finish in <= 9 h, writes `/kaggle/working/submission.csv`; submit via the notebook.
+- Hidden test ~400 molecules, up to 25 SMILES each. 5 submissions/day; 2 final selections.
+- Current pipeline estimate on 400 molecules: ~6.5 h (engine 2 ~1.9 h, PubChem ~1 h, v1 engine ~0.8 h, ICEBERG <= 1.5 h,
+  GLACIER <= 1.1 h, fixed ~20 min). Any addition must report its runtime and keep the total under ~8.5 h.
+
 ### Winner obligations and reproducibility (section 2.8)
 - Record every external resource in `EXTERNAL_RESOURCES.md`: name, source URL, version/record ID, licence,
   and what it's used for. Add the entry in the same change that introduces the resource.
