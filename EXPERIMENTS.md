@@ -43,6 +43,9 @@ Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (ar
 cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),
 MassKG (PMC11415640), MassSpecGym in the Wild (arXiv 2606.19624).
 
+Availability check 2026-10-09: MARLIN (arXiv 2607.04774, Che/Du/Xu, UNC Charlotte, posted 2026-07-06) has no public
+code or weights found (paper mirrors, web search, likely GitHub names). Stage D must use a model with released code + weights.
+
 ## Results
 
 Metric: MRR@25 (InChIKey-14), GroupKFold by molecule, paired bootstrap 95% CI vs the baseline.
