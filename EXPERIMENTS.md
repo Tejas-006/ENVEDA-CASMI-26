@@ -2,49 +2,57 @@
 
 ## Ground rules
 
-- Comply with competition rules sections 4 and 6 (see CLAUDE.md).
-- No more tuning constants against the public LB; it's a sanity check only.
-- Every change is scored on sim2: MRR@25, GroupKFold by molecule, and it ships only with a positive paired-bootstrap 95% CI.
-- Final picks: one sim2-best submission + one public-LB-best submission.
-- sim1x (the original v4 ranker's simulation) is lost; sim2 replaces it.
+- Comply with competition rules sections 4 and 6 and the code-competition limits (CLAUDE.md): internet off, <= 9 h run,
+  keep the pipeline under ~8.5 h (current estimate ~6.5 h on ~400 hidden molecules).
+- sim2 = practice test on public MassSpecGym spectra of compounds NOT in competition train (`--source external`).
+  The old train-holdout sim scored 0.93-0.97 vs LB 0.401 (models had memorised those compounds) and is not used for decisions.
+- Only ~125 unseen questions exist (232 of 28,929 MassSpecGym compounds, minus tautomers of train compounds):
+  sim2 noise ~ +/-0.035, about the same as the public LB (~130 molecules). Treat both as independent checks.
+- Keep a change if: sim2 dMRR >= +0.01 AND public LB drop <= 0.02 AND runtime fits. Model-vs-model choices
+  (CMatch v1 vs v1.1 vs FLARE-style) are decided on `val isomer MRR` (~2,000 held-out train compounds; far less noisy).
+- Two attempts per direction, then move on. No tuning constants against the public LB.
+- Final picks: one public-LB-best submission + one sim2-best submission.
 
-## Version plan
+## Where the score is lost (sim2 pilot, 11 q; refresh with the ~125-question run)
 
-Projections are rough guesses from public benchmarks (MassSpecGym etc.), not measurements; gains overlap, so they don't add up.
-Combined target: ~0.43–0.46 public LB.
+| Situation | Share | Fixed by |
+|---|---|---|
+| Truth not in the candidate pool at all | ~27% | Stage C (bigger pool), Stage D (generative proposals) |
+| In pool, not in top 25 | ~18% | Ranker features (backlog v5e/v5g), Stage E stacker |
+| In top 25, not first | ~28% | Stages A/B (CMatch, FLARE-style), ICEBERG/GLACIER |
+| First | ~27% | — |
 
-| # | Ver | Change | Why / projected effect | Needs sim2? | Status |
+## Target model (what the final submission should look like)
+
+1. Candidates: baseline library/pool/PubChem channel (v4n) **+ generated natural-product library (C)** **+ generative
+   proposals for weak-library-match molecules only (D)**.
+2. Ranking: baseline v1 engine + LightGBM ranker (unchanged; retraining needs >= 500 unseen questions).
+3. Look-alike re-scoring: ICEBERG + GLACIER **+ CMatch (A; instrument-robust v1.1 from B; FLARE-style v2 or a fusion of
+   both if it wins head-to-head)**.
+4. Fusion: hand-set weights and PubChem gate today; **learned stacker (E)** once enough unseen questions exist.
+5. Engine-2 reciprocal-rank fusion (unchanged) -> submission.csv.
+
+## Consolidated plan
+
+Projections are rough (public benchmarks, not measurements) and overlap. Path: 0.401 -> ~0.41 (A/B) -> ~0.42-0.43 (C)
+-> ~0.44-0.47 (D), if each stage passes its gate.
+
+| Stage | Version | What | Keep gate | If it fails | Status |
 |---|---|---|---|---|---|
-| 0 | v5a | Build sim2 and score the unchanged pipeline on it (notebooks: NOTEBOOKS.md). Questions now come from public MassSpecGym spectra of compounds NOT in competition train (`--source external`); the train-holdout mode is kept but is far too easy | Replaces lost sim1x; baseline's sim score for all later comparisons; LB stays 0.401 | builds it | train-holdout test (20 q): MRR 0.975 pre-fusion / 0.933 final vs LB 0.401 → models memorised train compounds; switched to external questions, download notebook ready |
-| 1 | v5c | Learned stacker replacing ICE_LAM/GL_LAM/ALPHA/KRR and the PubChem gate (LIB_TAU/REL_TH/slots) | Removes ~8 LB-tuned constants: biggest generalization fix; per-molecule weighting for later signals; +0.005–0.02 | yes | planned |
-| 2 | v5b | CMatch: own contrastive spectrum↔molecule matcher (spectrum transformer + fingerprint MLP, trained on competition train vs same-formula decoys, sim2 hold-out excluded) as within-formula re-rank term (LB track), later a ranker feature (sim track). DreaMS/ChemBERTa dropped: DreaMS pins old torch/numpy/RDKit and can't run offline beside RDKit 2026 | Ranks candidates directly, should lift top-1 among same-formula isomers; +0.01–0.03 | LB: no; ranker feature: yes | training notebook ready (tools/make_cmatch_notebook.py) |
-| 3 | v5d | Swap ICEBERG → MARASON (retrieval-augmented ICEBERG) | Stronger isomer re-scoring (18.7%→27.8% top-1 in paper); +0.01–0.02 | optional | on hold: code is public in coleygroup/ms-pred (MIT) but no released weights; training it ourselves is days of GPU |
-| 4 | v5e | Retrain FPNet with listwise/contrastive loss over candidate sets | Optimizes ranking, not bit accuracy; low-risk swap; +0.005–0.015 | yes | planned |
-| 5 | v5f | Generative re-rank feature (GLMR-style; MS-BART/FlowMS/MARLIN), only on weak-library-match molecules | Orthogonal signal + new candidates for out-of-pool compounds; +0.005–0.02, GPU cost | optional | planned |
-| 6 | v5g | Formula-confidence feature (SIRIUS/BUDDY-style) | Picks the right formula group before isomer ranking; skip if explain_score covers it; 0–+0.01 | yes, if ranker feature | planned |
-
-## Roadmap and decision gates (2026-10-09)
-
-Where MRR is lost (sim2 external pilot, 11 q, final MRR 0.32; refresh with the ~125-question run):
-truth not in candidate pool ~27% | in pool but outside top 25 ~18% | in top 25 but not first ~28% | first ~27%.
-
-Rules for every attempt: judged on sim2-external AND public LB. Keep if sim2 ΔMRR >= +0.01, LB drop <= 0.02
-(its noise band, ~130 molecules) and runtime fits. Two attempts per direction, then move on.
-
-| Stage | What | Gate to keep | If it fails |
-|---|---|---|---|
-| A | CMatch within-formula re-rank (v5b) | training val isomer MRR >= 0.30; sim2 >= +0.01; LB >= -0.02 | 2nd try: FLARE-style peak-to-atom matcher; then drop contrastive line |
-| B | Cross-instrument robustness for CMatch (hidden test looks timsTOF; MassSpecGym has none) | only after A passes; LB >= +0.01 (sim2 can't measure it) | drop |
-| C | Bigger candidate pool: generated natural-product library (MassKG-style) | truth-in-pool +5 points, sim2 not worse | 2nd try: different library/generator |
-| D | Generative models (MARLIN formula-free / MS-GPT), only for weak-library-match molecules, as candidate proposer + GLMR-style re-rank | START only if after C truth-not-in-pool >= 20%, OR two ranking upgrades in a row each < +0.01. KEEP if >= +0.015 and <= 1.5 h extra runtime | drop |
-| E | Learned stacker (v5c) | needs >= 500 unseen sim2 questions (add CASMI 2016/2017/2022 answer sets etc.) | keep fixed weights |
+| 0 | v5a | sim2 baseline on all unseen MassSpecGym questions (~125) | — | — | running (pilot: MRR 0.32, truth in pool 73%) |
+| A | v5b | CMatch v1: own contrastive matcher (spectrum transformer + fingerprint MLP, trained vs same-formula decoys), within-formula re-rank before ICEBERG/GLACIER at fixed weight 1.0 | val isomer MRR >= 0.30; sim2 >= +0.01; LB >= -0.02 | A2 | training running; submission notebook ready (tools/make_lb_notebook.py --cmatch) |
+| A2 | v5b2 | FLARE-style CMatch v2: peak-to-atom late-interaction scoring, same data/split; also try fusing v1+v2 | beats v1 on val isomer MRR, then same gates as A | drop the contrastive line | planned (build when A finishes, or earlier for a head-to-head) |
+| B | v5b1 | CMatch v1.1 instrument robustness: instrument-label dropout, balanced timsTOF sampling, peak/intensity/m-z augmentation, cross-instrument same-molecule pairing (arXiv 2602.00547), per-instrument val scores | timsTOF val isomer MRR >= +0.02 vs v1 without hurting others; LB >= -0.02 | drop | planned; first check whether test.parquet has `instrument_type` (CMatch v1 assumes non-timsTOF if it's missing) |
+| C | v5h | Bigger candidate pool: generated natural-product library (MassKG-style; ours if theirs isn't public) | truth-in-pool +5 points; sim2 not worse; runtime fits | 2nd try: different library/generator | planned |
+| D | v5f | Generative proposals + GLMR-style re-rank for weak-library-match molecules only | START if after C truth-not-in-pool >= 20%, or two ranking upgrades in a row each < +0.01. KEEP if >= +0.015 and <= 1.5 h extra | drop | candidates need public code + weights: MARLIN has none (checked 2026-10-09); check DiffMS, FlowMS, MS-GPT |
+| E | v5c | Learned stacker replacing ICE_LAM/GL_LAM/ALPHA/KRR and the PubChem gate | needs >= 500 unseen questions (add CASMI 2016/2017/2022 answer sets etc.); sim2 >= +0.01 | keep fixed weights | waiting on data |
+| backlog | v5e | Retrain FPNet with a listwise/contrastive loss | needs ranker retraining on unseen questions (same data gate as E) | — | deprioritised |
+| backlog | v5g | Formula-confidence feature (SIRIUS/BUDDY-style) | as a re-rank term: sim2 >= +0.01 | — | deprioritised |
+| on hold | v5d | ICEBERG -> MARASON | — | — | code public (coleygroup/ms-pred, MIT), no released weights |
 
 Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (arXiv 2511.06259),
 cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),
 MassKG (PMC11415640), MassSpecGym in the Wild (arXiv 2606.19624).
-
-Availability check 2026-10-09: MARLIN (arXiv 2607.04774, Che/Du/Xu, UNC Charlotte, posted 2026-07-06) has no public
-code or weights found (paper mirrors, web search, likely GitHub names). Stage D must use a model with released code + weights.
 
 ## Results
 
