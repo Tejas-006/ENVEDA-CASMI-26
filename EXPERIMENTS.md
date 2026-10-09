@@ -23,6 +23,26 @@ Combined target: ~0.43–0.46 public LB.
 | 5 | v5f | Generative re-rank feature (GLMR-style; MS-BART/FlowMS/MARLIN), only on weak-library-match molecules | Orthogonal signal + new candidates for out-of-pool compounds; +0.005–0.02, GPU cost | optional | planned |
 | 6 | v5g | Formula-confidence feature (SIRIUS/BUDDY-style) | Picks the right formula group before isomer ranking; skip if explain_score covers it; 0–+0.01 | yes, if ranker feature | planned |
 
+## Roadmap and decision gates (2026-10-09)
+
+Where MRR is lost (sim2 external pilot, 11 q, final MRR 0.32; refresh with the ~125-question run):
+truth not in candidate pool ~27% | in pool but outside top 25 ~18% | in top 25 but not first ~28% | first ~27%.
+
+Rules for every attempt: judged on sim2-external AND public LB. Keep if sim2 ΔMRR >= +0.01, LB drop <= 0.02
+(its noise band, ~130 molecules) and runtime fits. Two attempts per direction, then move on.
+
+| Stage | What | Gate to keep | If it fails |
+|---|---|---|---|
+| A | CMatch within-formula re-rank (v5b) | training val isomer MRR >= 0.30; sim2 >= +0.01; LB >= -0.02 | 2nd try: FLARE-style peak-to-atom matcher; then drop contrastive line |
+| B | Cross-instrument robustness for CMatch (hidden test looks timsTOF; MassSpecGym has none) | only after A passes; LB >= +0.01 (sim2 can't measure it) | drop |
+| C | Bigger candidate pool: generated natural-product library (MassKG-style) | truth-in-pool +5 points, sim2 not worse | 2nd try: different library/generator |
+| D | Generative models (MARLIN formula-free / MS-GPT), only for weak-library-match molecules, as candidate proposer + GLMR-style re-rank | START only if after C truth-not-in-pool >= 20%, OR two ranking upgrades in a row each < +0.01. KEEP if >= +0.015 and <= 1.5 h extra runtime | drop |
+| E | Learned stacker (v5c) | needs >= 500 unseen sim2 questions (add CASMI 2016/2017/2022 answer sets etc.) | keep fixed weights |
+
+Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (arXiv 2511.06259),
+cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),
+MassKG (PMC11415640), MassSpecGym in the Wild (arXiv 2606.19624).
+
 ## Results
 
 Metric: MRR@25 (InChIKey-14), GroupKFold by molecule, paired bootstrap 95% CI vs the baseline.
