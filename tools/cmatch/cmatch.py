@@ -53,6 +53,18 @@ def mol_features(smiles):
     return np.concatenate([cnt, mac])
 
 
+def scaffold_key(smiles):
+    """Murcko scaffold SMILES (the molecule itself if acyclic or unparsable), for scaffold-grouped splits."""
+    from rdkit import Chem, RDLogger
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+    RDLogger.DisableLog('rdApp.*')
+    try:
+        sc = MurckoScaffold.MurckoScaffoldSmiles(mol=Chem.MolFromSmiles(smiles))
+    except Exception:
+        sc = ''
+    return sc or f'acyclic:{smiles}'
+
+
 class SinEmb(nn.Module):
     def __init__(self, n=32, lo=0.01, hi=2000.0):
         super().__init__()

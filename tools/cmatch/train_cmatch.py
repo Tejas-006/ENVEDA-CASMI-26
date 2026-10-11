@@ -48,7 +48,12 @@ HOLDOUT = set(elig.inchikey14.values[_order[:SIM_HOLDOUT]])
 log(f'{len(meta):,} spectra / {len(comp):,} compounds; sim2 hold-out {len(HOLDOUT):,} (first: {elig.inchikey14.values[_order[0]]})')
 
 comp = comp[~comp.inchikey14.isin(HOLDOUT)].reset_index(drop=True)
-is_val = rng.random(len(comp)) < VAL_FRAC
+# validation = whole held-out Murcko scaffolds, so val compounds have no close relatives in training
+# (a random compound split scored 0.64 here but didn't carry over to unseen molecules)
+with MPool(os.cpu_count()) as mp:
+    SCAF = mp.map(cmatch.scaffold_key, list(comp.smiles), chunksize=1000)
+import zlib as _zlib
+is_val = np.array([(_zlib.crc32(sc.encode()) % 10000) / 10000 < VAL_FRAC for sc in SCAF])
 ci = pd.Series(np.arange(len(comp)), index=comp.inchikey14)
 
 # ---- 2. molecule features for every kept compound ----
@@ -94,14 +99,15 @@ SMODE = (m2.ionization_mode.astype(str).str.lower() == 'positive').values.astype
 STIMS = (m2.inst.values == 'timstof').astype(np.int64)
 SCOMP = m2.c.values.astype(np.int64)
 spec_of = pd.Series(np.arange(N)).groupby(SCOMP).apply(np.asarray).to_dict()
-log(f'training spectra: {N:,} for {len(spec_of):,} compounds')
+log(f'training spectra: {N:,} for {len(spec_of):,} compounds; scaffold-held-out val compounds: {int(is_val[list(spec_of)].sum()):,}')
 
 train_c = np.array([c for c in spec_of if not is_val[c]])
+GROUPS_TRAIN = {f: ix[~is_val[ix]] for f, ix in GROUPS.items()}   # decoys never come from held-out scaffolds
 val_c = np.array([c for c in spec_of if is_val[c]])
 
 
 def decoys(c, k):
-    g = GROUPS.get(form_of[c])
+    g = GROUPS_TRAIN.get(form_of[c])
     if g is not None and len(g) > 1:
         cand = g[g != c]
         return rng.choice(cand, k, replace=len(cand) < k)
