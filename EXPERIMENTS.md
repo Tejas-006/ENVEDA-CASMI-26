@@ -43,6 +43,7 @@ Projections are rough (public benchmarks, not measurements) and overlap. Path: 0
 |---|---|---|---|---|---|
 | 0 | v5a | sim2 baseline on all unseen MassSpecGym questions | — | — | done: 103 q, final 0.319 / pre-fusion 0.362 |
 | 0b | v5i | Drop the final engine-2 fusion (cell 9) | LB >= -0.02 (sim2 already +0.043) | keep fusion | done: LB 0.377 (-0.024) ✗; fusion kept |
+| 0c | v6 | Port of public-notebook fixes onto v4n (tools/lb/v6_final.py, `--v6`): base lists in ranker order; fused top-40 re-scored by GLACIER where it has scores, ICEBERG only where GLACIER is blind (non-[M+H]+); one vote per metric identity in the fusion; metric-safe dedupe + tail fill (overflow, pre-fusion, ranker top-60, engine 2, PubChem) | sim2 >= +0.01 (or ~neutral: dedupe/tail can't demote a truth); LB >= -0.02 | keep v4n | built; needs the 0.401 baseline .ipynb to generate |
 | A | v5b | CMatch v1 (val isomer MRR 0.642 on random-compound val; sim2 -0.015 ✗; LB 0.372 ✗): own contrastive matcher (spectrum transformer + fingerprint MLP, trained vs same-formula decoys), within-formula re-rank before ICEBERG/GLACIER at fixed weight 1.0 | val isomer MRR >= 0.30; sim2 >= +0.01; LB >= -0.02 | A2 | done: sim2 -0.015 ✗, LB 0.372 (-0.029) ✗; v1 re-rank dropped, retrain with scaffold val |
 | A2 | v5b2 | FLARE-style CMatch v2: peak-to-atom late-interaction scoring, same data/split; also try fusing v1+v2 | beats v1 on val isomer MRR, then same gates as A | drop the contrastive line | planned (build when A finishes, or earlier for a head-to-head) |
 | B | v5b1 | CMatch v1.1 instrument robustness: instrument-label dropout, balanced timsTOF sampling, peak/intensity/m-z augmentation, cross-instrument same-molecule pairing (arXiv 2602.00547), per-instrument val scores | timsTOF val isomer MRR >= +0.02 vs v1 without hurting others; LB >= -0.02 | drop | planned; first check whether test.parquet has `instrument_type` (CMatch v1 assumes non-timsTOF if it's missing) |
@@ -52,6 +53,8 @@ Projections are rough (public benchmarks, not measurements) and overlap. Path: 0
 | backlog | v5e | Retrain FPNet with a listwise/contrastive loss | needs ranker retraining on unseen questions (same data gate as E) | — | deprioritised |
 | backlog | v5g | Formula-confidence feature (SIRIUS/BUDDY-style) | as a re-rank term: sim2 >= +0.01 | — | deprioritised |
 | dropped | v5d | ICEBERG -> MARASON | — | — | dropped 2026-10-11 by decision: no released weights; training it ourselves isn't worth the GPU days |
+
+v6 sources (ideas only; our code): public Kaggle notebooks obstacledeveloper/casmi26-v1-1-metric-audit-and-safe-tail (metric dedupe + tail, reported LB 0.425 -> 0.433), flexonafft/casmi26-public-baseline-adaptation-experiments v80 (GLACIER-only final re-rank, identity fusion; reported 0.436; its notes: ICE+GL 0.402 vs GLACIER-only 0.417), samanyu1808/casmi26-iceberg-where-glacier-is-blind (reported 0.438), canqiang/casmi26-e006-window-40-ice-fallback-true (reported ~0.44). Reported scores are theirs, public LB only.
 
 Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (arXiv 2511.06259),
 cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),

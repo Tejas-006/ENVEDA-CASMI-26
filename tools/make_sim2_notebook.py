@@ -66,6 +66,25 @@ def patch_engine2(src):
     return src.replace(ENG_HOOK, ENG_HOOK_NEW)
 
 
+V6_SNAPSHOT = ("import copy\nV6_BASE_PRE = copy.deepcopy(BASE)   # v6: ranker lists (top-60) before ICEBERG/GLACIER\n")
+V6_RESTORE = ("# v6: keep the base lists in ranker order; GLACIER/ICEBERG act on the fused list in the v6 final pass\n"
+              "for _m in list(BASE):\n"
+              "    _p = V6_BASE_PRE.get(_m)\n"
+              "    if _p is not None:\n"
+              "        BASE[_m] = (list(_p[0])[:25], list(_p[1])[:25], _p[2])\n")
+V6_PREFUSION = "import shutil\nshutil.copy('submission.csv', 'sub_v4_prefusion.csv')   # v6: lists before the final fusion\n"
+
+
+def apply_v6(cells):
+    """GLACIER-first re-scoring, identity fusion and metric-safe tail (tools/lb/v6_final.py)."""
+    i7 = find_cell(cells, CELL7_MARK)
+    cells.insert(i7, code_cell(V6_SNAPSHOT))
+    cells.insert(i7 + 2, code_cell(V6_RESTORE))
+    i9 = find_cell(cells, CELL9_MARK)
+    cells.insert(i9, code_cell(V6_PREFUSION))
+    cells.insert(i9 + 2, code_cell(open(os.path.join(HERE, 'lb', 'v6_final.py')).read()))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('baseline')
@@ -74,6 +93,7 @@ def main():
     ap.add_argument('--size', type=int, default=500)
     ap.add_argument('--source', choices=['train', 'external'], default='external')
     ap.add_argument('--cmatch', action='store_true', help='insert the CMatch re-rank after BASE0 (needs casmi26-cmatch)')
+    ap.add_argument('--v6', action='store_true', help='GLACIER-first re-scoring + identity fusion + metric-safe tail')
     a = ap.parse_args()
 
     nb = json.load(open(a.baseline))
@@ -100,6 +120,8 @@ def main():
     i8 = find_cell(cells, CELL8_MARK)
     cells.insert(i8 + 1, code_cell("import shutil\nshutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_v4.csv'))   # sim2: before final fusion\n"))
 
+    if a.v6:
+        apply_v6(cells)
     find_cell(cells, CELL9_MARK)
     i7 = find_cell(cells, CELL7_MARK)
     src7 = ''.join(cells[i7]['source'])
