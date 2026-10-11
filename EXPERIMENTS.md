@@ -51,7 +51,7 @@ Projections are rough (public benchmarks, not measurements) and overlap. Path: 0
 | E | v5c | Learned stacker replacing ICE_LAM/GL_LAM/ALPHA/KRR and the PubChem gate | needs >= 500 unseen questions (add CASMI 2016/2017/2022 answer sets etc.); sim2 >= +0.01 | keep fixed weights | waiting on data |
 | backlog | v5e | Retrain FPNet with a listwise/contrastive loss | needs ranker retraining on unseen questions (same data gate as E) | — | deprioritised |
 | backlog | v5g | Formula-confidence feature (SIRIUS/BUDDY-style) | as a re-rank term: sim2 >= +0.01 | — | deprioritised |
-| on hold | v5d | ICEBERG -> MARASON | — | — | code public (coleygroup/ms-pred, MIT), no released weights |
+| dropped | v5d | ICEBERG -> MARASON | — | — | dropped 2026-10-11 by decision: no released weights; training it ourselves isn't worth the GPU days |
 
 Sources: FLARE (bioRxiv 2026.01.27.702086), MSAlign (arXiv 2605.19752), GLMR (arXiv 2511.06259),
 cross-instrument contrastive DG (arXiv 2602.00547), MS-GPT (arXiv 2607.23607), MARLIN (arXiv 2607.04774),
@@ -64,7 +64,7 @@ MassKG (PMC11415640), MassSpecGym in the Wild (arXiv 2606.19624).
 |---|---|---|
 | 1. Truth not in pool (~27%) | Generative proposals (MS-GPT formula-given, MARLIN formula-free, DiffMS/FlowMS) + generated NP library (MassKG-style) | MARLIN no code; others to check |
 | 2. In pool, outside top 25 (~18%) | Dense retrieval with a contrastive matcher over the whole mass window (FLARE, MSAlign, JESTR/MVP) | our CMatch / FLARE-style build |
-| 3. In top 25, not first (~28%) | Isomer experts: ICEBERG, GLACIER, FLARE peak-to-atom, new cross-encoder (MARASON: no weights) | partly in pipeline |
+| 3. In top 25, not first (~28%) | Isomer experts: ICEBERG, GLACIER, FLARE peak-to-atom, new cross-encoder | partly in pipeline |
 
 Router (heuristic first, learned in step 9), generalising the existing PubChem gate:
 strong library match -> keep ranker order | big ranker margin -> light re-rank | close same-formula race -> full isomer
