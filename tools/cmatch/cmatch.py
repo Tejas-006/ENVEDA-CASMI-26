@@ -111,11 +111,11 @@ class MolEncoder(nn.Module):
 
 
 class CMatch(nn.Module):
-    def __init__(self, d=256, layers=4, heads=8, out=256):
+    def __init__(self, d=256, layers=4, heads=8, out=256, drop=0.1):
         super().__init__()
-        self.cfg = dict(d=d, layers=layers, heads=heads, out=out)
-        self.spec = SpecEncoder(d, layers, heads, out)
-        self.mol = MolEncoder(out)
+        self.cfg = dict(d=d, layers=layers, heads=heads, out=out, drop=drop)
+        self.spec = SpecEncoder(d, layers, heads, out, drop)
+        self.mol = MolEncoder(out, drop=drop)
         self.logit_scale = nn.Parameter(torch.tensor(math.log(1 / 0.07)))
 
     def save(self, path, **extra):
