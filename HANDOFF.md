@@ -10,7 +10,7 @@ resources in `EXTERNAL_RESOURCES.md`.
 - **Next candidate: v6** (built, not run). It ports fixes from recent public notebooks that report 0.43–0.44.
 - **CMatch attempt 2** (training notebook built, not yet confirmed running). Last attempt of the contrastive line.
 - **Branch with all work:** `claude/gracious-maxwell-04dmc2` (it contains `claude/vibrant-edison-b7wd63` plus later
-  commits). `main` only has the first 5 commits; nothing has been merged since. Open a PR when you want it in `main`.
+  commits). `main` only has the first 5 commits; this branch is under review as https://github.com/Tejas-006/ENVEDA-CASMI-26/pull/2 (new commits to the branch update it).
 - **Repo is public.** Never commit notebooks (`*.ipynb` is gitignored), baseline code, Competition Data or
   anything derived from it (sim2 rows, spectrum caches).
 
@@ -143,5 +143,6 @@ Ports the direction of public notebooks onto our own v4n (no fork; our code, ide
 - Earlier plain-language plan (from the "Kaggle review" session):
   https://claude.ai/code/artifact/1d63a626-bd61-4523-a26c-603b0b6d1f48
 - Repo branch: https://github.com/Tejas-006/ENVEDA-CASMI-26/tree/claude/gracious-maxwell-04dmc2
+- Pull request: https://github.com/Tejas-006/ENVEDA-CASMI-26/pull/2
 - Public notebook analysed for v6 (uploaded, not in repo): canqiang/casmi26-e006-window-40-ice-fallback-true
   (lineage: obstacledeveloper V1.1, flexonafft v80, samanyu1808 "ICEBERG where GLACIER is blind").
