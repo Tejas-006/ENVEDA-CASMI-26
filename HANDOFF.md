@@ -1,4 +1,4 @@
-# Handoff: ENVEDA CASMI 2026, state as of 2026-10-12
+# Handoff: ENVEDA CASMI 2026, state as of 2026-10-14
 
 Everything a new session needs to continue. Read `CLAUDE.md` first: its competition rules and validation gate
 apply to every change. Results live in `EXPERIMENTS.md`, the Kaggle workflow in `NOTEBOOKS.md`, and external
@@ -6,9 +6,10 @@ resources in `EXTERNAL_RESOURCES.md`.
 
 ## 1. Where things stand
 
-- **Best submission: 0.401 public LB** (v4n, a fork of a public notebook). Nothing we've tried has beaten it yet.
-- **Next candidate: v6** (built, not run). It ports fixes from recent public notebooks that report 0.43–0.44.
-- **CMatch attempt 2** (training notebook built, not yet confirmed running). Last attempt of the contrastive line.
+- **Best submission: 0.425 public LB** (v6 = v4n + GLACIER-first re-scoring, identity fusion, metric-safe tail;
+  `t3jas06/casmi26-v6-lb` version 1). sim2 0.379 (+0.060 vs v4n). **v6 is the new baseline**: build on it, not v4n.
+- **CMatch attempt 2 passed** (scaffold-val isomer MRR 0.665). Next use: dense retrieval on top of v6, not re-ranking.
+- Previous best: 0.401 (v4n, notebook `t3jas06/baseline`, a fork of a public notebook).
 - **Branch with all work:** `claude/gracious-maxwell-04dmc2` (it contains `claude/vibrant-edison-b7wd63` plus later
   commits). `main` only has the first 5 commits; this branch is under review as https://github.com/Tejas-006/ENVEDA-CASMI-26/pull/2 (new commits to the branch update it).
 - **Repo is public.** Never commit notebooks (`*.ipynb` is gitignored), baseline code, Competition Data or
@@ -16,12 +17,19 @@ resources in `EXTERNAL_RESOURCES.md`.
 
 ## 2. How we work
 
-- Claude writes code and notebook generators in this repo. Kaggle can't be reached from a Claude session.
-- Tejas runs everything on Kaggle (free T4, about 30 GPU h/week) from Windows cmd in `%USERPROFILE%\kaggle-ml`,
-  using `python -m kaggle ...`. Kaggle user: `t3jas06`. Competition: `enveda-CASMI26-molecule-id-mass-spectra`.
-- Typical loop: Claude builds a push folder (`kernel-metadata.json` + `.ipynb`), then Tejas runs
-  `python -m kaggle kernels push -p <folder>` and `python -m kaggle kernels status t3jas06/<slug>`, and pastes
-  log lines back. Submissions are made in the browser (notebook page → Submit to competition).
+- Claude writes code and notebook generators in this repo.
+- **A local Claude Code session on Tejas's PC can drive Kaggle directly** (since 2026-10-13): the Kaggle CLI in
+  `%USERPROFILE%\kaggle-ml\.venv` (2.2.4, OAuth as `t3jas06`) pushes notebooks, polls status, downloads logs and
+  outputs, creates private datasets and submits. Cloud/web Claude sessions still can't reach Kaggle.
+  Free T4, about 30 GPU h/week. Competition: `enveda-CASMI26-molecule-id-mass-spectra`.
+- Typical loop: build a push folder (`kernel-metadata.json` + `.ipynb`) in `kaggle-ml\<name>`, then
+  `kaggle kernels push -p <folder>`, poll `kaggle kernels status t3jas06/<slug>`, read the log from
+  `kaggle kernels output t3jas06/<slug> -p <out> --file-pattern ".*\.log$"`. **Submissions need Tejas's OK each time**:
+  `kaggle competitions submit enveda-CASMI26-molecule-id-mass-spectra -k t3jas06/<slug> -v <N> -f submission.csv -m "<desc>"`.
+- A push run uses the visible stand-in test (`RERUN False`): only ~12 molecules are processed and the rest are
+  one-SMILES placeholders, so `v6 kept baseline row ... no valid candidates` for ~388 rows there is expected.
+- Datasets created from notebook output in the browser (e.g. `casmi26-cmatch`) can't take CLI-uploaded versions
+  ("Incompatible Dataset Type"); create a new private dataset instead.
 - Code-competition limits: internet off, ≤ 9 h, 5 submissions/day, 2 final picks. Pipeline is about 6.5 h on
   about 400 hidden molecules; keep any addition under about 8.5 h total.
 - Keep rule (EXPERIMENTS.md): keep a change if sim2 gains ≥ 0.01 AND the public LB drops ≤ 0.02 AND runtime fits.
@@ -32,14 +40,16 @@ resources in `EXTERNAL_RESOURCES.md`.
 
 | Asset | What | Status |
 |---|---|---|
-| 0.401 baseline notebook (owner t3jas06, slug not recorded here) | v4n pipeline: v1 engine + LightGBM ranker, engine 2 (analog propagation), PubChem channel, ICEBERG + GLACIER, final RRF fusion | Reference |
-| `t3jas06/casmi26-sim2-build` | Practice test (sim2); `--source external` uses unseen MassSpecGym compounds | Last baseline run: 103 q |
+| `t3jas06/baseline` | 0.401 v4n pipeline: v1 engine + LightGBM ranker, engine 2 (analog propagation), PubChem channel, ICEBERG + GLACIER, final RRF fusion. Input to every builder | Reference |
+| `t3jas06/casmi26-v6-lb` | v6 = baseline + `--v6` | **LB 0.425 (best)** |
+| `t3jas06/casmi26-sim2-build` | Practice test (sim2); `--source external` uses unseen MassSpecGym compounds | v8: v4n baseline 0.319 (103 q); v9: v6 0.379 |
 | `t3jas06/casmi26-massspecgym` (private dataset) | MassSpecGym HF revision d2e86d0 | Done |
-| `t3jas06/casmi26-cmatch-train` | CMatch training notebook | Attempt 2 notebook built |
-| `t3jas06/casmi26-cmatch` (private dataset) | CMatch weights (`cmatch.pt`, `cmatch.py`, `cmatch_meta.json`) | Holds v1; v2 only if it passes the gate |
+| `t3jas06/casmi26-cmatch-train` | CMatch training notebook | Attempt 2 done: passes (0.665) |
+| `t3jas06/casmi26-cmatch` (private dataset) | CMatch v1 weights (`cmatch.pt`, `cmatch.py`, `cmatch_meta.json`) | v1 only; used by `casmi26-v5-lb` |
+| `t3jas06/casmi26-cmatch-v2` (private dataset) | CMatch attempt 2: `cmatch_out/cmatch.pt` (= v1s winner), `cmatch_v1s.pt`, `cmatch_reg.pt`, meta; `cmatch_src/cmatch.py` | Created 2026-10-14 |
 | `t3jas06/casmi26-v5-lb` | Baseline + CMatch v1 re-rank | LB 0.372 |
 | `t3jas06/casmi26-v5-lb-nofusion` | Baseline without final engine-2 fusion | LB 0.377 |
-| casmi26-instrument-check (new, browser import) | CPU check of the test set's instrument | Built, not run |
+| `t3jas06/casmi26-instrument-check` | CPU check of the test set's instrument | Done: 100% timsTOF, column present |
 
 ## 4. History: what worked and what didn't
 
@@ -56,13 +66,18 @@ resources in `EXTERNAL_RESOURCES.md`.
 | 10-11 | CMatch v1 on the LB (`casmi26-v5-lb`) | **0.372** (−0.029) | Didn't work; dropped. sim2 and LB agree. |
 | 10-11 | No final engine-2 fusion (v5i) on the LB | **0.377** (−0.024) | Didn't work, although sim2 said +0.043. The fusion stays; sim2 can't be trusted alone on engine-2 changes. |
 | 10-08→10-11 | MARASON, MARLIN | No public weights / code | Dropped. |
+| 10-11 | CMatch attempt 2 (scaffold hold-out val, variants v1s and reg) | v1s 0.665, reg 0.656 scaffold-val isomer MRR; seen-train 0.823 | Passes the 0.30 gate on an honest split. Weights in `casmi26-cmatch-v2`. |
+| 10-13 | Simulator-confound check | ICE and GL `status: ok` in the 0.372 and 0.377 logs | Ruled out: those losses were real. |
+| 10-13 | v6 on sim2 (103 q) | final 0.379 (+0.060), top1 0.291, recall@25 0.524 (−0.03) | Passes sim2 gate. |
+| 10-13 | v6 on the LB (`casmi26-v6-lb` v1) | **0.425** (+0.024) | **Worked: new best and new baseline.** sim2 and LB agree. |
 
 **Possible confound:** recent public notebooks found that on the newer Python 3.13 Kaggle image, ICEBERG's bundled
 RDKit 2025.3.6 wheel (cp312) won't install, so ICEBERG and GLACIER fail silently and the ranker order is kept. If that
-happened in our 0.377 / 0.372 runs, those results are confounded. **Not checked yet** (next steps, step 2). Our push
-folders copy the baseline's pinned docker image, which may avoid it.
+happened in our 0.377 / 0.372 runs, those results are confounded. **Checked 2026-10-13: not the case.** Both logs
+show ICE and GL `status: ok` with RDKit 2025.03.6; our push folders copy the baseline's pinned docker image. Keep
+copying that image.
 
-## 5. Work built in this session (all on the branch, untested on Kaggle)
+## 5. Work built in the 2026-10-12 session (now run on Kaggle: v6 kept, CMatch attempt 2 passed)
 
 ### 5a. CMatch attempt 2 (`tools/cmatch/train_cmatch.py`, `tools/cmatch/cmatch.py`, commit 4ab9d53)
 - Validation = whole held-out Murcko scaffolds (2%); decoys never come from held-out scaffolds.
@@ -106,26 +121,24 @@ Ports the direction of public notebooks onto our own v4n (no fork; our code, ide
 
 ## 6. Next steps (in order)
 
-1. **Get the 0.401 baseline notebook into the local repo folder** (never commit it):
-   `python -m kaggle kernels pull t3jas06/<0.401-slug> -p base -m`.
-2. **Check the simulator confound:** `python -m kaggle kernels output t3jas06/casmi26-v5-lb -p v5lb_out`, then
-   `findstr /C:"ICE FAILED" /C:"GL FAILED" /C:"ICE meta" /C:"GL meta" v5lb_out\*.log`.
-3. **Build v6** with `--v6` for the LB track (`casmi26-v6-lb`) and sim2 (`--source external --v6`).
-4. **Push `casmi26-v6-lb`**, confirm `V6 FINAL` with non-zero GLACIER coverage in the log, then submit. Expect
-   about 0.43–0.44 if our pipeline behaves like theirs.
-5. **Push sim2 `--v6`** (about 1.5 GPU h); compare `summary.json` with the 103-q baseline (final 0.319, pre-fusion 0.362).
-6. **Run CMatch attempt 2:** `kernels pull t3jas06/casmi26-cmatch-train -p cmtrain2 -m`, swap in the new `.ipynb`,
-   push, check status; paste `CMATCH SUMMARY`. Save as a new `casmi26-cmatch` version only if `passes_gate`.
-7. **Run the instrument check** (CPU, browser import, add the competition data); paste `INSTRUMENT CHECK` and
-   `test columns:`.
-8. **If the test is timsTOF without an `instrument_type` column:** fix the timsTOF flag in `cmatch_rerank.py`
-   before any further CMatch use.
-9. **Log every result** in `EXPERIMENTS.md` (date, change, commit, sim2 Δ, LB, decision).
-10. **If v6 wins, make it the new baseline.** Then layer CMatch dense retrieval (if it passed) on top of v6, not v4n.
-11. **Grow the practice set with timsTOF spectra** of compounds not in train: find public timsTOF MS/MS libraries,
-    check licences and host bans, dedupe by InChIKey-14 + tautomer; aim for ≥ 500 questions.
-12. **Later:** pool expansion for the 29% not-in-pool (check COCONUT/PubChem coverage first), learned stacker once
-    ≥ 500 unseen questions exist, fill EXTERNAL_RESOURCES TODOs and MANIFEST hashes.
+Done 2026-10-13/14: baseline pulled (`t3jas06/baseline`), confound ruled out, v6 built, run and submitted (LB 0.425,
+sim2 0.379, kept), CMatch attempt 2 run (passes) and saved as `casmi26-cmatch-v2`, instrument check run (test is
+timsTOF; no CMatch bug).
+
+1. ~~Instrument check~~ done 2026-10-14: `test.parquet` has `instrument_type`, 100% `timsTOF` (classifier agrees:
+   95.4%). `cmatch_rerank.py` reads it correctly (lowercased -> `timstof`), so no fix needed. Any new CMatch code must
+   read the column the same way. sim2 has no timsTOF questions, which makes step 5 more important.
+2. **Investigate v6's recall@25 drop** (0.55 -> 0.524 on sim2): find the questions where the truth was in v4n's top 25
+   but not v6's (compare `sub_final.csv` of sim2-build v8 vs v9) and check whether dedupe or the tail fill pushed it out.
+3. **CMatch dense retrieval on top of v6** (EXPERIMENTS step 4): CMatch v2 top-K over the whole mass window, union
+   into the candidate lists before the ranker. Gate: sim2 recall@25 +3 points, runtime <= +20 min; then LB.
+4. **Log every result** in `EXPERIMENTS.md` (date, change, commit, sim2 Δ, LB, decision).
+5. **Grow the practice set with timsTOF spectra** of compounds not in train: find public timsTOF MS/MS libraries,
+   check licences and host bans, dedupe by InChIKey-14 + tautomer; aim for >= 500 questions.
+6. **Later:** pool expansion for the 29% not-in-pool (check COCONUT/PubChem coverage first), the DreaMS NP final fill
+   the v6 source notebooks use (needs an EXTERNAL_RESOURCES entry, licence and ban check), learned stacker once
+   >= 500 unseen questions exist, fill EXTERNAL_RESOURCES TODOs and MANIFEST hashes.
+7. **Final picks:** currently LB-best = v6 (0.425); sim2-best = v6 (0.379).
 
 ## 7. Known issues and open questions
 
