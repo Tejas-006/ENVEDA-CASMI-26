@@ -54,6 +54,28 @@ print(f'external queries: {len(QUERIES)} (dropped {n_taut} tautomers of train co
 
 _qt = _ext.iloc[[x for x, _ in q_rows]].reset_index(drop=True)
 _qt['molecule_id'] = [m for _, m in q_rows]
+
+# Precursor m/z realism (2026-10-15): MassSpecGym precursors are often 10-160 ppm off the structure's mass, while the
+# competition's timsTOF spectra are within ~4 ppm (tools/diag/mass_error_check.py: p99 4.1 ppm, none > 10 ppm). The
+# pipeline searches +-10 ppm, so off-mass questions were unanswerable for a reason the hidden test doesn't have.
+# Recompute each precursor from the truth's exact mass + adduct shift, with timsTOF-like noise. Fragments unchanged.
+PRECURSOR_FIX, PRECURSOR_PPM_SD, PRECURSOR_PPM_MAX = True, 2.0, 4.5
+_PROTON = 1.007276
+_ADDUCT_SHIFT = {'[M+H]+': _PROTON, '[M+Na]+': 22.989218, '[M+NH4]+': 18.033823, '[M+K]+': 38.963158,
+                 '[M-H]-': -_PROTON, '[M+Cl]-': 34.969402, '[M+CH2O2-H]-': 44.998201, '[M+FA-H]-': 44.998201,
+                 '[M+HCOO]-': 44.998201, '[M+H-H2O]+': _PROTON - 18.010565, '[M-H2O+H]+': _PROTON - 18.010565}
+if PRECURSOR_FIX:
+    from rdkit.Chem.Descriptors import ExactMolWt as _emw
+    _shift = _qt.adduct.astype(str).str.replace(' ', '').map(_ADDUCT_SHIFT)
+    _exact = _qt.normalized_smiles.map(lambda s: _emw(Chem.MolFromSmiles(s)) if Chem.MolFromSmiles(s) else np.nan)
+    _new = (_exact + _shift) * (1 + np.clip(np.random.default_rng(SEED).normal(0, PRECURSOR_PPM_SD, len(_qt)),
+                                            -PRECURSOR_PPM_MAX, PRECURSOR_PPM_MAX) * 1e-6)
+    _old_err = ((_qt.precursor_mz.astype(float) - _shift - _exact) / _exact * 1e6).abs()
+    _ok = _new.notna()
+    print(f'precursor fix: {int(_ok.sum())}/{len(_qt)} spectra recomputed; original |error| median '
+          f'{_old_err[_ok].median():.1f} ppm, >10 ppm {(_old_err[_ok] > 10).mean():.1%}; '
+          f'unknown adducts kept as-is: {sorted(set(_qt.adduct[~_ok].astype(str)))}')
+    _qt.loc[_ok, 'precursor_mz'] = _new[_ok].values
 if 'spectrum_id' in TEST_SCHEMA.names:
     _qt['spectrum_id'] = [f'ext{SHARD}_{i}' for i in range(len(_qt))] if not int_ids else \
         920_000_000 + SHARD * 100_000 * MAX_SPEC + np.arange(len(_qt))

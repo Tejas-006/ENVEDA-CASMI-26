@@ -27,13 +27,16 @@ for _f in ['eng_lists.json', 'pc_lists.json']:
 shutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_final.csv'))
 
 
-def _rr(sub_path):
+OFFICIAL_TRUTH = {m: official_key(s) for m, s in zip(QUERIES.molecule_id, QUERIES.smiles)}
+
+
+def _rr(sub_path, key_fn=official_key, truth=OFFICIAL_TRUTH):
     s = pd.read_csv(sub_path)
     out = {}
     for mid, smi in zip(s.molecule_id, s.smiles):
-        t, r = TRUTH_KEY.get(mid), 0.0
+        t, r = truth.get(mid), 0.0
         for i, x in enumerate(str(smi).split(';')[:25], 1):
-            if t and metric_key(x) == t:
+            if t and key_fn(x) == t:
                 r = 1.0 / i; break
         out[mid] = r
     return out
@@ -53,6 +56,10 @@ for _name, _p in [('v4_pre_fusion', 'sub_v4.csv'), ('final', 'sub_final.csv')]:
         ip = _q.in_pool.reindex(rr.index).astype(bool)
         summary[_name]['by_in_pool'] = {'in_pool': round(rr[ip].mean(), 4) if ip.any() else None,
                                         'not_in_pool': round(rr[~ip].mean(), 4) if (~ip).any() else None}
+    old = pd.Series(_rr(os.path.join(SIM_OUT, _p), metric_key, TRUTH_KEY))   # pre-2026-10-15 scorer (no stereo removal)
+    summary[_name + '_oldkey'] = dict(mrr=round(old.mean(), 4), top1=round((old == 1).mean(), 4),
+                                      recall25=round((old > 0).mean(), 4))
+summary['scorer'] = 'official_key (stereo removed, canonical tautomer, InChIKey-14); *_oldkey = metric_key'
 summary['source'] = SOURCE
 if 'in_pool' in _q.columns:
     summary['truth_in_pool'] = round(float(_q.in_pool.mean()), 4)

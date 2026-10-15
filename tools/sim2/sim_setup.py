@@ -23,6 +23,19 @@ def metric_key(s):
         return None
 
 
+def official_key(s):
+    """The official metric's key: stereo removed, then canonical tautomer, InChIKey first block. Used for scoring;
+    metric_key (no stereo removal) still picks the questions, so the question set stays the same as earlier runs."""
+    try:
+        m = Chem.MolFromSmiles(s)
+        if m is None:
+            return None
+        Chem.RemoveStereochemistry(m)
+        return Chem.MolToInchiKey(_TE.Canonicalize(m))[:14]
+    except Exception:
+        return None
+
+
 def scaffold_of(s):
     try:
         return MurckoScaffold.MurckoScaffoldSmiles(mol=Chem.MolFromSmiles(s))

@@ -121,6 +121,9 @@ Ports the direction of public notebooks onto our own v4n (no fork; our code, ide
 
 ## 6. Next steps (in order)
 
+**Superseded 2026-10-15 by `EXECUTION_PLAN.md`** (impact-ordered steps with gates and fallbacks). The list below is
+kept for history.
+
 Done 2026-10-13/14: baseline pulled (`t3jas06/baseline`), confound ruled out, v6 built, run and submitted (LB 0.425,
 sim2 0.379, kept), CMatch attempt 2 run (passes) and saved as `casmi26-cmatch-v2`, instrument check run (test is
 timsTOF; no CMatch bug).
