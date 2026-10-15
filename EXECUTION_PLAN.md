@@ -56,3 +56,11 @@ costs -0.008 on v11** (0.581 -> 0.574), so step 1 also checks which final-step p
 2. Steps 3 and 4 in parallel (CPU notebooks + data work) while 5 runs on GPU.
 3. 6 after 2 and 5; 7 only if 4 says so; then 8, 9, 10 one at a time on the best list so far.
 4. LB submissions: after 5 (if kept), after 7, and after the best of 8–10. Final picks: LB-best + sim2-best.
+
+## Status
+| Step | Status (2026-10-15) |
+|---|---|
+| 0 | done: v11 reference 0.574 (commit 04430da) |
+| 1 | done: replay reproduces v11 exactly; found v6.1 (final-step GLACIER weight 0.5, window 25): +0.025 [+0.001, +0.052]; `casmi26-v61-lb` built, LB pending |
+| 2 | done: no signal reaches AUC 0.65 -> step 6 reduced to a fixed rule, revisit after step 3 |
+| 3-11 | not started. Note: sim2 has no negative-mode questions (test ~19%); step 3 should add some |

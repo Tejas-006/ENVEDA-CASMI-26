@@ -7,7 +7,10 @@
 #  3. Metric-safe tail: drop candidates the official metric treats as the same molecule, then fill empty slots
 #     from the fused overflow, the pre-fusion list, the ranker's top-60, engine 2 and the PubChem list.
 # Any failure for a molecule keeps the baseline fusion's row for it.
-V6_WINDOW = 40
+# v6.1 (2026-10-15): GLACIER weight 1.0 -> 0.5 and window 40 -> 25 in this final pass only. Offline replay on sim2 v11
+# (tools/replay/replay_final.py, accurate precursors): weights 0.25-0.75 all beat 1.0 by +0.02-0.03 with CI > 0; the
+# full weight let GLACIER swap truths from the top 25 to slots 26-40. v6 = V6_WINDOW 40, V6_GL_LAM = GL_LAM (1.0).
+V6_WINDOW, V6_GL_LAM = 25, 0.5
 import collections, json
 from functools import lru_cache
 from rdkit import Chem, RDLogger
@@ -87,7 +90,7 @@ for _mid0, _fallback in zip(_v6_base.molecule_id, _v6_base.smiles):
         keys = [chem.score_key(s) or s for s in cands]
         gl, ice = v6_scores(GL_SCORES, mid), v6_scores(ICE_SCORES, mid)
         if gl and len(cands) > 1:
-            o = gl_fuse.rerank_multi(cands, keys, scs, [v6_form(s) for s in cands], [{}, gl], [ICE_LAM, GL_LAM], top_n=len(cands))
+            o = gl_fuse.rerank_multi(cands, keys, scs, [v6_form(s) for s in cands], [{}, gl], [ICE_LAM, V6_GL_LAM], top_n=len(cands))
             cands = [cands[i] for i in o]; _v6_stats['glacier'] += 1
         elif ice and len(cands) > 1:
             o = ice_fuse.rerank(cands, keys, scs, [v6_form(s) for s in cands], ice, lam=ICE_LAM, top_n=len(cands))
