@@ -63,4 +63,9 @@ costs -0.008 on v11** (0.581 -> 0.574), so step 1 also checks which final-step p
 | 0 | done: v11 reference 0.574 (commit 04430da) |
 | 1 | done: replay reproduces v11 exactly; found v6.1 (final-step GLACIER weight 0.5, window 25): +0.025 [+0.001, +0.052]; `casmi26-v61-lb` built, LB pending |
 | 2 | done: no signal reaches AUC 0.65 -> step 6 reduced to a fixed rule, revisit after step 3 |
-| 3-11 | not started. Note: sim2 has no negative-mode questions (test ~19%); step 3 should add some |
+| 3 | **stopped by its kill rule** (2026-10-16): the competition train set already aggregates GNPS, MassBank, MoNA, RIKEN, MSnLib, Spectraverse and MS-DIAL (Data tab), so those libraries can't supply unseen questions (MassSpecGym gave 232 of 28,929). Rules section 6 allows free public external data unless the host bans it; GNPS community spectra are CC0, MassBank licences are per record (some CC BY-NC-SA), MoNA's licence unconfirmed. Fallback: keep 103 q and judge small steps on counts. sim2 realism still to add from the Data tab: drop peaks above precursor + 2 Da |
+| 4 | done (2026-10-16): on v11 only **14/103** truths are in no source (not 37%: that was the off-mass precursors); **12 of the 14 are in PubChem** (PUG REST by InChIKey), i.e. inside the PubChem channel's +-10 ppm window but below its top 25; 2 are in no public database (generative only). So step 7 becomes 'deeper PubChem list', not a new database. Caveat: practice compounds come from public libraries, so they are likelier to be in PubChem than Enveda's hidden natural products. Also: 12 truths are in some source but not in the final top 25 |
+| 5 | **passes sim2** (replay on v12 with v6 constants: +0.011 [+0.001, +0.024], recall +4.9 pts); `casmi26-v62-lb` = v6 + `--pc-sim 10` built for the LB |
+| v6.1 | **failed on the LB** (0.399 vs 0.425): v6 constants restored; GLACIER weighting is not tuned on sim2 any more |
+| 7 | **dropped** (2026-10-16): only 2 of 12 PubChem-held truths rank in the top 100 (35, 48). Remaining lever for that bucket = better PubChem ranking (fingerprint model), see step 10 |
+| 6, 8-11 | not started. Note: sim2 has no negative-mode questions (test ~19%) |

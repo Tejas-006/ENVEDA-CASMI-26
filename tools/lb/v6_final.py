@@ -7,10 +7,11 @@
 #  3. Metric-safe tail: drop candidates the official metric treats as the same molecule, then fill empty slots
 #     from the fused overflow, the pre-fusion list, the ranker's top-60, engine 2 and the PubChem list.
 # Any failure for a molecule keeps the baseline fusion's row for it.
-# v6.1 (2026-10-15): GLACIER weight 1.0 -> 0.5 and window 40 -> 25 in this final pass only. Offline replay on sim2 v11
-# (tools/replay/replay_final.py, accurate precursors): weights 0.25-0.75 all beat 1.0 by +0.02-0.03 with CI > 0; the
-# full weight let GLACIER swap truths from the top 25 to slots 26-40. v6 = V6_WINDOW 40, V6_GL_LAM = GL_LAM (1.0).
-V6_WINDOW, V6_GL_LAM = 25, 0.5
+# v6.1 (GLACIER weight 0.5, window 25) won +0.025 on the sim2 replay but scored 0.399 vs v6's 0.425 on the LB
+# (2026-10-16): GLACIER is worth more on timsTOF than on sim2's Orbitrap/QTOF spectra. Back to v6's values; don't
+# tune GLACIER's weight on sim2.
+V6_WINDOW, V6_GL_LAM = 40, 1.0
+V6_PC_WINDOW = globals().get('V6_PC_WINDOW', 0)   # set by the --pc-sim builder flag (EXECUTION_PLAN step 5)
 import collections, json
 from functools import lru_cache
 from rdkit import Chem, RDLogger
@@ -87,6 +88,14 @@ for _mid0, _fallback in zip(_v6_base.molecule_id, _v6_base.smiles):
             cands, scs = v6_fusion(first, e_smis, ALPHA, KRR, V6_WINDOW)
         else:
             cands = v6_unique(first, V6_WINDOW); scs = [1.0 / (KRR + r) for r in range(1, len(cands) + 1)]
+        if V6_PC_WINDOW:                   # step 5: PubChem top-K join the window (scored by ICE/GL via PC_SIM_K)
+            _pc0 = PC.get(_mid0, PC.get(mid, {})) if isinstance(PC, dict) else {}
+            _have = {v6_identity(s) for s in cands}
+            _add = [s for s in v6_unique(list((_pc0 or {}).get('pc', [])), 3 * V6_PC_WINDOW)
+                    if v6_identity(s) not in _have][:V6_PC_WINDOW]
+            _lo = min(scs) if scs else 0.0
+            cands = list(cands) + _add; scs = list(scs) + [_lo - 1e-6 * (i + 1) for i in range(len(_add))]
+            _v6_stats['pc_added'] += len(_add)
         keys = [chem.score_key(s) or s for s in cands]
         gl, ice = v6_scores(GL_SCORES, mid), v6_scores(ICE_SCORES, mid)
         if gl and len(cands) > 1:

@@ -85,10 +85,60 @@ def apply_v6(cells):
     cells.insert(i9 + 2, code_cell(open(os.path.join(HERE, 'lb', 'v6_final.py')).read()))
 
 
+PC_SIM_HOOK = '    cands = {m: c for m, c in cands.items() if c}\n'
+PC_SIM_ADD = (
+    "    if PC_SIM_K and isinstance(PC, dict):   # EXECUTION_PLAN step 5: PubChem top-K of EVERY molecule through ICE/GL\n"
+    "        n_pc = 0\n"
+    "        for m in mids:\n"
+    "            p = PC.get(m)\n"
+    "            if p and p.get('pc'):\n"
+    "                before = len(cands.get(m, []))\n"
+    "                cands[m] = list(dict.fromkeys(list(cands.get(m, [])) + [str(x) for x in p['pc'][:PC_SIM_K]]))\n"
+    "                n_pc += len(cands[m]) - before\n"
+    "        print('PC_SIM: PubChem candidates added to ICE/GL input:', n_pc, flush=True)\n")
+
+
+PC_MARK = '# PubChem-only channel'
+PC_K_LIT = '\\nK = 25\\n'          # the PubChem core is a string literal in this cell: its K line, escaped
+PC_DEEP_SAVE = (
+    "# sim2 diagnostic (--pc-depth): keep the deep PubChem lists for analysis, give the pipeline its usual top 25\n"
+    "import json as _j, shutil as _sh\n"
+    "if isinstance(PC, dict) and PC:\n"
+    "    _sh.copy('/kaggle/working/pc_lists.json', os.path.join(SIM_OUT, 'pc_lists_deep.json'))\n"
+    "    for _p in PC.values():\n"
+    "        if isinstance(_p, dict):\n"
+    "            for _k in ('pc', 'pc_fz', 'pc_keys'):\n"
+    "                if isinstance(_p.get(_k), list):\n"
+    "                    _p[_k] = _p[_k][:25]\n"
+    "    _j.dump(PC, open('/kaggle/working/pc_lists.json', 'w'))\n")
+
+
+def apply_pc_depth(cells, depth):
+    """Diagnostic only: the PubChem channel lists `depth` candidates instead of 25; the deep lists are saved to
+    sim_out/pc_lists_deep.json and the pipeline still sees the top 25 (same results as a normal run, more runtime)."""
+    i3 = find_cell(cells, PC_MARK)
+    src3 = ''.join(cells[i3]['source'])
+    assert src3.count(PC_K_LIT) == 1, 'PubChem core K literal not found'
+    cells[i3] = code_cell(src3.replace(PC_K_LIT, f'\\nK = {int(depth)}\\n'))
+    cells.insert(i3 + 1, code_cell(PC_DEEP_SAVE))
+
+
+def apply_pc_sim(cells, k):
+    """Step 5: score each molecule's PubChem top-k with ICEBERG/GLACIER (adds scores only; the baseline's own
+    re-ranking is unchanged) and let those k candidates into the v6 final re-score window (V6_PC_WINDOW)."""
+    i7 = find_cell(cells, CELL7_MARK)
+    src7 = ''.join(cells[i7]['source'])
+    assert src7.count(PC_SIM_HOOK) == 1, 'ICE candidate-dict line not found in the ICEBERG cell'
+    cells[i7] = code_cell(src7.replace(PC_SIM_HOOK, PC_SIM_ADD + PC_SIM_HOOK))
+    cells.insert(i7, code_cell(f'PC_SIM_K = V6_PC_WINDOW = {int(k)}   # EXECUTION_PLAN step 5\n'))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('baseline')
     ap.add_argument('out')
+    ap.add_argument('--pc-sim', type=int, default=0, help='step 5: PubChem top-K through ICE/GL and into the v6 window')
+    ap.add_argument('--pc-depth', type=int, default=0, help='diagnostic: save PubChem lists this deep (pipeline keeps 25)')
     ap.add_argument('--shard', type=int, default=0)
     ap.add_argument('--size', type=int, default=500)
     ap.add_argument('--source', choices=['train', 'external'], default='external')
@@ -122,6 +172,11 @@ def main():
 
     if a.v6:
         apply_v6(cells)
+    if a.pc_sim:
+        assert a.v6, '--pc-sim needs --v6 (the PubChem candidates join the v6 final window)'
+        apply_pc_sim(cells, a.pc_sim)
+    if a.pc_depth:
+        apply_pc_depth(cells, a.pc_depth)
     find_cell(cells, CELL9_MARK)
     i7 = find_cell(cells, CELL7_MARK)
     src7 = ''.join(cells[i7]['source'])

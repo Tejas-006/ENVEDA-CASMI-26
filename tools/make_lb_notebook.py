@@ -12,7 +12,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from make_sim2_notebook import code_cell, find_cell, apply_v6, CELL6_MARK, CELL9_MARK  # noqa: E402
+from make_sim2_notebook import code_cell, find_cell, apply_v6, apply_pc_sim, CELL6_MARK, CELL9_MARK  # noqa: E402
 import make_kaggle_push  # noqa: E402
 
 NO_FUSION = "ENG = {}   # v5i: skip the final engine-2 fusion (sim2 external, 103 q: final 0.319 vs pre-fusion 0.362)\n"
@@ -26,6 +26,7 @@ def main():
     ap.add_argument('--cmatch', action='store_true')
     ap.add_argument('--no-fusion', action='store_true')
     ap.add_argument('--v6', action='store_true')
+    ap.add_argument('--pc-sim', type=int, default=0, help='step 5: PubChem top-K through ICE/GL and into the v6 window')
     ap.add_argument('--slug', default='casmi26-v5-lb')
     a = ap.parse_args()
     nb = json.load(open(a.baseline))
@@ -47,6 +48,10 @@ def main():
         assert not a.no_fusion, '--v6 rebuilds the final fusion; it cannot be combined with --no-fusion'
         apply_v6(cells)
         notes.append('v6 GLACIER-first re-scoring + identity fusion + metric-safe tail')
+    if a.pc_sim:
+        assert a.v6, '--pc-sim needs --v6'
+        apply_pc_sim(cells, a.pc_sim)
+        notes.append(f'PubChem top-{a.pc_sim} through ICEBERG/GLACIER and into the v6 window')
     assert notes, 'choose at least one upgrade'
     cells.insert(0, dict(cell_type='markdown', metadata={}, source=[
         f'# {a.slug}\n', 'Baseline v4n (LB 0.401) + ' + '; '.join(notes) + '\n']))
