@@ -76,6 +76,18 @@ if PRECURSOR_FIX:
           f'{_old_err[_ok].median():.1f} ppm, >10 ppm {(_old_err[_ok] > 10).mean():.1%}; '
           f'unknown adducts kept as-is: {sorted(set(_qt.adduct[~_ok].astype(str)))}')
     _qt.loc[_ok, 'precursor_mz'] = _new[_ok].values
+
+# Peaks above precursor + 2 Da are removed from the hidden test (Data tab: "a fragment cannot outweigh its
+# singly-charged precursor"); do the same to the practice questions (2026-10-17).
+PEAK_CAP_DA = 2.0
+_n_before = int(sum(len(m) for m in _qt.ms2_mzs))
+_caps = (_qt.precursor_mz.astype(float) + PEAK_CAP_DA).values
+_kept = [np.asarray(m, float) <= c for m, c in zip(_qt.ms2_mzs, _caps)]
+_qt['ms2_mzs'] = [list(np.asarray(m, float)[k]) for m, k in zip(_qt.ms2_mzs, _kept)]
+_qt['ms2_normalized_intensities'] = [list(np.asarray(i, float)[k]) for i, k in zip(_qt.ms2_normalized_intensities, _kept)]
+_qt['ms2_normalized_intensities'] = [list(np.asarray(i) / max(i)) if len(i) else i for i in _qt.ms2_normalized_intensities]
+print(f'peak cap (precursor + {PEAK_CAP_DA} Da): kept {int(sum(len(m) for m in _qt.ms2_mzs)):,} of {_n_before:,} peaks; '
+      f'spectra left empty: {int(sum(len(m) == 0 for m in _qt.ms2_mzs))}')
 if 'spectrum_id' in TEST_SCHEMA.names:
     _qt['spectrum_id'] = [f'ext{SHARD}_{i}' for i in range(len(_qt))] if not int_ids else \
         920_000_000 + SHARD * 100_000 * MAX_SPEC + np.arange(len(_qt))

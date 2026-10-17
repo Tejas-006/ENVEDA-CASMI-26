@@ -123,6 +123,21 @@ def apply_pc_depth(cells, depth):
     cells.insert(i3 + 1, code_cell(PC_DEEP_SAVE))
 
 
+MCE_HOOKS = ('budget_s=ICE_BUDGET,', 'budget_s=GL_BUDGET,')
+
+
+def apply_multi_ce(cells):
+    """Merged multi-energy spectra are scored against merged predictions at each listed energy (tools/lb/multi_ce.py):
+    a wrapper passed to run_ice / run_gl as `python=`."""
+    i7 = find_cell(cells, CELL7_MARK)
+    src7 = ''.join(cells[i7]['source'])
+    for h in MCE_HOOKS:
+        assert src7.count(h) == 1, f'runner call {h!r} not found in the ICEBERG cell'
+        src7 = src7.replace(h, h + ' python=MCE_PYTHON,')
+    cells[i7] = code_cell(src7)
+    cells.insert(i7, code_cell(open(os.path.join(HERE, 'lb', 'multi_ce.py')).read()))
+
+
 def apply_pc_sim(cells, k):
     """Step 5: score each molecule's PubChem top-k with ICEBERG/GLACIER (adds scores only; the baseline's own
     re-ranking is unchanged) and let those k candidates into the v6 final re-score window (V6_PC_WINDOW)."""
@@ -139,6 +154,7 @@ def main():
     ap.add_argument('out')
     ap.add_argument('--pc-sim', type=int, default=0, help='step 5: PubChem top-K through ICE/GL and into the v6 window')
     ap.add_argument('--pc-depth', type=int, default=0, help='diagnostic: save PubChem lists this deep (pipeline keeps 25)')
+    ap.add_argument('--multi-ce', action='store_true', help='score merged multi-energy spectra against merged predictions')
     ap.add_argument('--shard', type=int, default=0)
     ap.add_argument('--size', type=int, default=500)
     ap.add_argument('--source', choices=['train', 'external'], default='external')
@@ -177,6 +193,8 @@ def main():
         apply_pc_sim(cells, a.pc_sim)
     if a.pc_depth:
         apply_pc_depth(cells, a.pc_depth)
+    if a.multi_ce:
+        apply_multi_ce(cells)
     find_cell(cells, CELL9_MARK)
     i7 = find_cell(cells, CELL7_MARK)
     src7 = ''.join(cells[i7]['source'])

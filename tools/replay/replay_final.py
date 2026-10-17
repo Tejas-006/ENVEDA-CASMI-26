@@ -157,7 +157,9 @@ def paired(a, b, n=5000, seed=0):
 def load_run(d):
     j = lambda f: json.load(open(os.path.join(d, f))) if os.path.exists(os.path.join(d, f)) else {}
     csv = lambda f: dict(zip(*[pd.read_csv(os.path.join(d, f))[c].astype(str) for c in ('molecule_id', 'smiles')]))
-    return dict(pre=csv('sub_v4.csv'), final=csv('sub_final.csv'), eng=j('eng_lists.json'), pc=j('pc_lists.json'),
+    # pc_lists_v6.json (sim2 runs from 2026-10-17) = the PubChem lists after the notebook re-sorted gated ones
+    return dict(pre=csv('sub_v4.csv'), final=csv('sub_final.csv'), eng=j('eng_lists.json'),
+                pc=j('pc_lists_v6.json') or j('pc_lists.json'),
                 base=j('base_pre_ice.json'), gl=j('gl_scores.json'), ice=j('ice_scores.json'),
                 q=pd.read_parquet(os.path.join(d, 'queries.parquet')))
 

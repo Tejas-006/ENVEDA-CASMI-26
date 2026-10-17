@@ -25,6 +25,8 @@ for _f in ['eng_lists.json', 'pc_lists.json']:
     if os.path.exists(f'/kaggle/working/{_f}'):
         shutil.copy(f'/kaggle/working/{_f}', os.path.join(SIM_OUT, _f))
 shutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_final.csv'))
+if isinstance(globals().get('PC'), dict):   # PubChem lists as the v6 final step saw them (gated lists re-sorted by ICE/GL)
+    _js({str(k): v for k, v in PC.items()}, os.path.join(SIM_OUT, 'pc_lists_v6.json'))
 
 
 OFFICIAL_TRUTH = {m: official_key(s) for m, s in zip(QUERIES.molecule_id, QUERIES.smiles)}
