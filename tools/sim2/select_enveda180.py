@@ -46,7 +46,7 @@ except Exception as e:
 
 by_ik = {k: g for k, g in _ext[_ext.inchikey14.isin(set(pick.inchikey14))].groupby('inchikey14')}
 int_ids = pa.types.is_integer(TEST_SCHEMA.field('molecule_id').type)
-q_rows, qmeta, n_taut = [], [], 0
+q_rows, drop_rows, qmeta, n_taut = [], set(), [], 0      # drop_rows: library rows removed (none: library untouched)
 for qi, r in pick.iterrows():
     tk = metric_key(r.smiles)
     if tk in TRAIN_IKS:                     # tautomer of a train compound: the metric would count it as seen

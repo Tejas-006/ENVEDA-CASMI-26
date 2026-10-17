@@ -11,12 +11,14 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 SIM_DIR = os.path.join(HERE, 'sim2')
 
-SMOKE_MARK = '# SMOKE switch'
-ENG_MARK = '# Our engine (two-ranker'
-CELL6_MARK = '# all molecules -> base lists'
+# markers match both the v4n baseline (section comments) and the E006 fork (the same text as docstrings)
+SMOKE_MARK = 'SMOKE switch'
+ENG_MARK = 'Our engine (two-ranker'
+CELL6_MARK = 'all molecules -> base lists'
 CELL6_SCORE = 'score = rank_score(np.concatenate([X, F], 1), list(FEATURES) + list(names))'
-CELL7_MARK = '# ICEBERG post-ranker'
-CELL8_MARK = '# gated PubChem merge'
+CELL7_MARK = 'ice_fuse.run_ice('
+CELL8_MARK = 'gated PubChem merge'
+E006_MARK = 'E006: window=40'              # markdown cell of the E006 fork (layout detection)
 CELL9_MARK = 'ALPHA, KRR ='
 GL_BUDGET_LIT = ', 1.0, 4000'
 
@@ -174,6 +176,82 @@ def apply_pc_sim(cells, k):
     cells.insert(i7, code_cell(f'PC_SIM_K = V6_PC_WINDOW = {int(k)}   # EXECUTION_PLAN step 5\n'))
 
 
+E006_PATCHES = (   # practice runs only: the E006 observers check the REAL test ids and stop on any base error
+    ("ids = set(pre['input_ids'])", "ids = set(scope['te'].molecule_id.astype(str))   # sim2: practice questions"),
+    ("    assert scope['n_err'] == 0\n", "    print('base inference errors', scope['n_err'])   # sim2: warn, don't stop\n"),
+    ("assert n_err == 0, f'Base inference errors: {n_err}'", "print('base inference errors', n_err)   # sim2: warn, don't stop"),
+)
+
+
+def is_e006(cells):
+    return any(E006_MARK in ''.join(c['source']) for c in cells)
+
+
+def apply_e006_sim2(cells):
+    for old, new in E006_PATCHES:
+        hits = [i for i, c in enumerate(cells) if c['cell_type'] == 'code' and old in ''.join(c['source'])]
+        assert len(hits) == 1, f'E006 practice patch target not found exactly once: {old!r}'
+        cells[hits[0]] = code_cell(''.join(cells[hits[0]]['source']).replace(old, new))
+
+
+AB_SNAPSHOT = """# sim2 A/B (--ab): snapshot the engine outputs; every cell from the simulators onwards runs twice
+import copy as _abc, shutil as _abs, glob as _abg
+AB_ARM_LABEL = {label!r}
+_AB_KEYS = [k for k in ('BASE', 'PC', 'ENG', 'BASE_TAIL_CANDIDATES') if k in globals()]
+_AB_STATE = {{k: _abc.deepcopy(globals()[k]) for k in _AB_KEYS}}
+_AB_DIR = '/tmp/ab_snapshot'; os.makedirs(_AB_DIR, exist_ok=True)
+_AB_FILES = sorted(os.path.basename(f) for f in _abg.glob('/kaggle/working/*') if os.path.isfile(f))
+for _f in _AB_FILES:
+    _abs.copy2(os.path.join('/kaggle/working', _f), _AB_DIR)
+print('A/B snapshot:', _AB_KEYS, len(_AB_FILES), 'files; arm B =', AB_ARM_LABEL, f'{{time.time() - T0:.0f}}s')
+"""
+AB_SWITCH = """# sim2 A/B: arm A finished -> keep its outputs, restore the snapshot, run arm B
+_abs.copy('submission.csv', os.path.join(SIM_OUT, 'sub_final_A.csv'))
+if os.path.exists(os.path.join(SIM_OUT, 'sub_v4.csv')):
+    _abs.move(os.path.join(SIM_OUT, 'sub_v4.csv'), os.path.join(SIM_OUT, 'sub_v4_A.csv'))
+for _f in _abg.glob('/kaggle/working/*'):
+    if os.path.isfile(_f) and os.path.basename(_f) not in _AB_FILES:
+        os.remove(_f)
+for _f in _AB_FILES:
+    _abs.copy2(os.path.join(_AB_DIR, _f), os.path.join('/kaggle/working', _f))
+for _k, _v in _AB_STATE.items():
+    globals()[_k] = _abc.deepcopy(_v)
+print('A/B: arm A saved as sub_final_A.csv; state restored; running arm B =', AB_ARM_LABEL, f'{time.time() - T0:.0f}s')
+"""
+DEL_ENGINES = 'del V, E, bank; '
+
+
+def _arm_multi_ce(tail):
+    """arm B = runners with the multi-energy wrapper (tools/lb/multi_ce.py)."""
+    i7 = find_cell(tail, CELL7_MARK)
+    src7 = ''.join(tail[i7]['source'])
+    for h in MCE_HOOKS:
+        assert src7.count(h) == 1, f'runner call {h!r} not found in the ICEBERG cell'
+        src7 = src7.replace(h, h + ' python=MCE_PYTHON,')
+    tail[i7] = code_cell(src7)
+    tail.insert(0, code_cell(open(os.path.join(HERE, 'lb', 'multi_ce.py')).read()))
+    return tail
+
+
+AB_ARMS = {'multi_ce': _arm_multi_ce}
+
+
+def apply_ab(cells, arm):
+    """Run every cell from the simulator cell to the end twice on the same engine outputs: arm A unchanged (saved as
+    sub_final_A.csv / sub_v4_A.csv), arm B with `arm` applied (sub_final.csv / sub_v4.csv). sim_finish scores both,
+    paired. Engines (the expensive part) run once."""
+    import copy
+    i7 = find_cell(cells, CELL7_MARK)
+    tail_b = [copy.deepcopy(c) for c in cells[i7:]]
+    j7 = find_cell(tail_b, CELL7_MARK)
+    src = ''.join(tail_b[j7]['source'])
+    assert src.count(DEL_ENGINES) == 1, 'engine deletion not found in the simulator cell'
+    tail_b[j7] = code_cell(src.replace(DEL_ENGINES, ''))      # arm A already deleted them
+    tail_b = AB_ARMS[arm](tail_b)
+    cells[i7:i7] = [code_cell(AB_SNAPSHOT.format(label=arm))]
+    cells.extend([code_cell(AB_SWITCH)] + tail_b)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('baseline')
@@ -187,6 +265,7 @@ def main():
     ap.add_argument('--source', choices=['train', 'external', 'enveda180'], default='external')
     ap.add_argument('--cmatch', action='store_true', help='insert the CMatch re-rank after BASE0 (needs casmi26-cmatch)')
     ap.add_argument('--v6', action='store_true', help='GLACIER-first re-scoring + identity fusion + metric-safe tail')
+    ap.add_argument('--ab', choices=sorted(AB_ARMS), default=None, help='paired A/B: run the simulator-onwards cells twice')
     a = ap.parse_args()
 
     nb = json.load(open(a.baseline))
@@ -198,8 +277,13 @@ def main():
     setup = build_setup(a.source, a.shard, a.size)
     cells[find_cell(cells, SMOKE_MARK)] = code_cell(setup)
 
-    i2 = find_cell(cells, ENG_MARK)
-    cells[i2] = code_cell(patch_engine2(''.join(cells[i2]['source'])))
+    e006 = is_e006(cells)
+    if e006:
+        assert not (a.v6 or a.pc_sim or a.both_ce or a.cmatch), 'E006 already has these overlays / they target v4n'
+        apply_e006_sim2(cells)
+    if a.source == 'train':          # the engine-2 library patch is only needed when questions come from train
+        i2 = find_cell(cells, ENG_MARK)
+        cells[i2] = code_cell(patch_engine2(''.join(cells[i2]['source'])))
 
     i6 = find_cell(cells, CELL6_MARK)
     cells[i6] = code_cell(patch_cell6(''.join(cells[i6]['source'])))
@@ -230,6 +314,9 @@ def main():
     src7 = ''.join(cells[i7]['source'])
     assert src7.count(GL_BUDGET_LIT) == 1, 'GLACIER budget literal not found'
     cells[i7] = code_cell(src7.replace(GL_BUDGET_LIT, ', 1.0, SIM_GL_BUDGET'))
+    if a.ab:
+        assert not (a.multi_ce or a.both_ce), '--ab compares the change itself; do not also apply it to both arms'
+        apply_ab(cells, a.ab)
     cells.append(code_cell(read('sim_finish.py')))
 
     # a timestamped progress line before every step after the setup cell, so a stalled run shows where it is

@@ -64,6 +64,19 @@ for _name, _p in [('v4_pre_fusion', 'sub_v4.csv'), ('final', 'sub_final.csv')]:
     old = pd.Series(_rr(os.path.join(SIM_OUT, _p), metric_key, TRUTH_KEY))   # pre-2026-10-15 scorer (no stereo removal)
     summary[_name + '_oldkey'] = dict(mrr=round(old.mean(), 4), top1=round((old == 1).mean(), 4),
                                       recall25=round((old > 0).mean(), 4))
+if os.path.exists(os.path.join(SIM_OUT, 'sub_final_A.csv')):      # --ab: paired arm A (unchanged) vs arm B (change)
+    _ra = pd.Series(_rr(os.path.join(SIM_OUT, 'sub_final_A.csv')))
+    _rb = pd.Series(_rr(os.path.join(SIM_OUT, 'sub_final.csv'))).reindex(_ra.index)
+    _d = (_rb - _ra).values
+    _bs = np.array([_d[np.random.default_rng(i).integers(0, len(_d), len(_d))].mean() for i in range(2000)])
+    _m = lambda r: dict(mrr=round(r.mean(), 4), top1=round((r == 1).mean(), 4), recall25=round((r > 0).mean(), 4))
+    summary['ab'] = dict(arm_b=globals().get('AB_ARM_LABEL'), A=_m(_ra), B=_m(_rb), delta=round(float(_d.mean()), 4),
+                         ci95=[round(float(np.percentile(_bs, 2.5)), 4), round(float(np.percentile(_bs, 97.5)), 4)],
+                         better=int((_d > 0).sum()), worse=int((_d < 0).sum()))
+    if 'ion_mode' in _q.columns:                                   # e.g. negative-mode questions separately
+        _neg = _q.ion_mode.reindex(_ra.index).astype(str).str.contains('negative')
+        summary['ab']['by_mode'] = {k: dict(n=int(msk.sum()), A=round(_ra[msk].mean(), 4), B=round(_rb[msk].mean(), 4))
+                                    for k, msk in (('has_negative', _neg), ('positive_only', ~_neg)) if msk.any()}
 summary['scorer'] = 'official_key (stereo removed, canonical tautomer, InChIKey-14); *_oldkey = metric_key'
 summary['source'] = SOURCE
 if 'in_pool' in _q.columns:

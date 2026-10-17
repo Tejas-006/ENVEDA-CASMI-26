@@ -57,8 +57,12 @@ def main():
         apply_multi_ce(cells)
         notes.append('merged multi-energy spectra scored against merged ICEBERG/GLACIER predictions')
     assert notes, 'choose at least one upgrade'
+    base_label = ('E006 fork (antriksharya/casmi26-e006-e2rank2, LB 0.442)'
+                  if any('E006: window=40' in ''.join(c['source']) for c in cells) else 'Baseline v4n (LB 0.401)')
+    if base_label.startswith('E006'):
+        assert not (a.v6 or a.no_fusion or a.cmatch or a.pc_sim), 'these options target the v4n baseline'
     cells.insert(0, dict(cell_type='markdown', metadata={}, source=[
-        f'# {a.slug}\n', 'Baseline v4n (LB 0.401) + ' + '; '.join(notes) + '\n']))
+        f'# {a.slug}\n', base_label + ' + ' + '; '.join(notes) + '\n']))
     nbp = os.path.join(tempfile.mkdtemp(), f'{a.slug}.ipynb')
     json.dump(nb, open(nbp, 'w'), indent=1)
     make_kaggle_push.main(a.meta, nbp, a.out_dir, a.slug, a.slug, ','.join(extra))
