@@ -41,6 +41,14 @@ C = dict(ik=col('inchikey'), smiles=col('smiles'), inchi=col('inchi', exclude=('
          prec=col('prec', any_of=('mz',)), adduct=col('adduct') or col('precursor_type') or col('ion_type'),
          mode=col('ion', any_of=('mode', 'polar')) or col('polarity'), ce=col('collision') or col('energy'),
          formula=col('formula'))
+# Enveda-180 release schema (seen 2026-10-18: MGF-style, every field a string): override the guesses
+KNOWN = dict(ik='inchikey', smiles='smiles', prec='pepmass', mzs='mzs', its='intensities', adduct='adduct', mode='ionmode',
+             ce='collision_energies', formula='formula')
+for k, v in KNOWN.items():
+    if v in names:
+        C[k] = v
+if C['mzs'] and C['its']:
+    C['peaks'] = None
 print('detected columns:', C, flush=True)
 need = ['ik', 'prec', 'adduct']
 if any(C[k] is None for k in need) or (C['mzs'] is None or C['its'] is None) and C['peaks'] is None:
@@ -62,7 +70,15 @@ keep_cols = [c for c in {C[k] for k in C} if c]
 _us = set(unseen)
 full_keys = sorted({str(k) for k, k14 in zip(ik, ik14) if k14 in _us})
 del ik, ik14
-t = pq.read_table(PQ, columns=keep_cols, filters=[(C['ik'], 'in', full_keys)]).to_pandas()   # unseen rows only
+import pyarrow.compute as pc
+_want = pa.array(full_keys)
+parts = []                                   # stream: big nested list columns can't go to pandas in one piece
+for b in pq.ParquetFile(PQ).iter_batches(columns=keep_cols, batch_size=100_000):
+    b = b.filter(pc.is_in(b.column(C['ik']), value_set=_want))
+    if b.num_rows:
+        parts.append(b.to_pandas())
+t = pd.concat(parts, ignore_index=True)       # unseen rows only
+print(f'unseen-compound spectra read: {len(t):,}', flush=True)
 t['inchikey14'] = [str(k)[:14] for k in t[C['ik']]]
 t['adduct'] = t[C['adduct']].astype(str).str.replace(' ', '')
 print('adducts among unseen-compound spectra:', t.adduct.value_counts().head(15).to_dict(), flush=True)
@@ -73,7 +89,9 @@ if C['peaks'] and not (C['mzs'] and C['its']):
 else:
     t['ms2_mzs'] = t[C['mzs']].map(lambda v: [float(x) for x in v]); t['ms2_normalized_intensities'] = t[C['its']].map(lambda v: [float(x) for x in v])
 t['ms2_normalized_intensities'] = [list(np.asarray(i) / max(i)) if len(i) and max(i) > 0 else list(i) for i in t.ms2_normalized_intensities]
-t['precursor_mz'] = t[C['prec']].astype(float)
+import re as _re
+_num = lambda s: [float(x) for x in _re.findall(r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?', str(s))]
+t['precursor_mz'] = t[C['prec']].map(lambda s: (_num(s) or [np.nan])[0]).astype(float)   # 'mz [intensity]'
 if C['mode']:
     m = t[C['mode']].astype(str).str.lower()
     t['ionization_mode'] = np.where(m.str.contains('neg') | m.str.contains('-'), 'negative', 'positive')
@@ -81,7 +99,7 @@ else:
     t['ionization_mode'] = np.where(t.adduct.str.endswith('-'), 'negative', 'positive')
 t['instrument_type'] = 'timsTOF'
 ce = t[C['ce']] if C['ce'] else pd.Series([None] * len(t), index=t.index)
-t['collision_energy_ev'] = ce.map(lambda v: [float(x) for x in np.atleast_1d(v)] if v is not None and str(v) != 'nan' else [])
+t['collision_energy_ev'] = ce.map(lambda v: _num(v) if v is not None and str(v) not in ('nan', 'None', '') else [])
 t['collision_energy_orig'] = ce.astype(str); t['collision_energy_orig_units'] = 'eV'
 t['base_peak_intensity'] = None
 t['smiles'] = t[C['smiles']] if C['smiles'] else None

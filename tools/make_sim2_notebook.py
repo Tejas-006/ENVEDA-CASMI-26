@@ -31,7 +31,7 @@ def read(name):
 
 
 def build_setup(source, shard=0, size=500):
-    assert source in ('train', 'external')
+    assert source in ('train', 'external', 'enveda180')
     s = read('sim_setup.py').replace('SHARD, SHARD_SIZE = 0, 500', f'SHARD, SHARD_SIZE = {shard}, {size}')
     s = s.replace("SOURCE = 'train'", f"SOURCE = '{source}'")
     assert s.count('# @@SELECT@@\n') == 1
@@ -138,6 +138,32 @@ def apply_multi_ce(cells):
     cells.insert(i7, code_cell(open(os.path.join(HERE, 'lb', 'multi_ce.py')).read()))
 
 
+BOTH_CE_HOOK = 'def gl_of(m):\n'
+BOTH_CE_ADD = (
+    "# sim2 (--both-ce): the same runner input scored again with the multi-energy wrapper; saved for offline replay only\n"
+    "ICE_SCORES_MCE, GL_SCORES_MCE = {}, {}\n"
+    "try:\n"
+    "    ICE_SCORES_MCE = ice_fuse.run_ice(ICE_PKG, items, workdir='/kaggle/working/ice_work_mce', device='cuda',\n"
+    "                                      budget_s=ICE_BUDGET, site='/kaggle/working/ice_site', python=MCE_PYTHON)\n"
+    "    gc.collect(); torch.cuda.empty_cache()\n"
+    "    GL_SCORES_MCE = gl_fuse.run_gl(GL_PKG, items, workdir='/kaggle/working/gl_work_mce', device='cuda',\n"
+    "                                   budget_s=GL_BUDGET, site='/kaggle/working/ice_site',\n"
+    "                                   wheels=os.path.join(ICE_PKG, 'wheels'), python=MCE_PYTHON)\n"
+    "    print('MCE scores (sim2 extra): ICE', len(ICE_SCORES_MCE), 'GL', len(GL_SCORES_MCE), f'{time.time() - T0:.0f}s')\n"
+    "except Exception as e:\n"
+    "    print('MCE scoring failed (sim2 extra only):', repr(e))\n")
+
+
+def apply_both_ce(cells):
+    """sim2 only: score the simulator input twice (runners as shipped -> used by the pipeline; multi-energy wrapper ->
+    saved as ice/gl_scores_mce.json), so the replay harness can compare both on the same run."""
+    i7 = find_cell(cells, CELL7_MARK)
+    src7 = ''.join(cells[i7]['source'])
+    assert src7.count(BOTH_CE_HOOK) == 1, 'gl_of() definition not found in the ICEBERG cell'
+    cells[i7] = code_cell(src7.replace(BOTH_CE_HOOK, BOTH_CE_ADD + BOTH_CE_HOOK))
+    cells.insert(i7, code_cell(open(os.path.join(HERE, 'lb', 'multi_ce.py')).read()))
+
+
 def apply_pc_sim(cells, k):
     """Step 5: score each molecule's PubChem top-k with ICEBERG/GLACIER (adds scores only; the baseline's own
     re-ranking is unchanged) and let those k candidates into the v6 final re-score window (V6_PC_WINDOW)."""
@@ -155,9 +181,10 @@ def main():
     ap.add_argument('--pc-sim', type=int, default=0, help='step 5: PubChem top-K through ICE/GL and into the v6 window')
     ap.add_argument('--pc-depth', type=int, default=0, help='diagnostic: save PubChem lists this deep (pipeline keeps 25)')
     ap.add_argument('--multi-ce', action='store_true', help='score merged multi-energy spectra against merged predictions')
+    ap.add_argument('--both-ce', action='store_true', help='also save multi-energy simulator scores for offline replay')
     ap.add_argument('--shard', type=int, default=0)
     ap.add_argument('--size', type=int, default=500)
-    ap.add_argument('--source', choices=['train', 'external'], default='external')
+    ap.add_argument('--source', choices=['train', 'external', 'enveda180'], default='external')
     ap.add_argument('--cmatch', action='store_true', help='insert the CMatch re-rank after BASE0 (needs casmi26-cmatch)')
     ap.add_argument('--v6', action='store_true', help='GLACIER-first re-scoring + identity fusion + metric-safe tail')
     a = ap.parse_args()
@@ -195,6 +222,9 @@ def main():
         apply_pc_depth(cells, a.pc_depth)
     if a.multi_ce:
         apply_multi_ce(cells)
+    if a.both_ce:
+        assert not a.multi_ce, '--both-ce keeps the shipped runners for the pipeline; do not combine with --multi-ce'
+        apply_both_ce(cells)
     find_cell(cells, CELL9_MARK)
     i7 = find_cell(cells, CELL7_MARK)
     src7 = ''.join(cells[i7]['source'])

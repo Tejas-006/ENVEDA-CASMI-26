@@ -22,7 +22,7 @@ _TE = rdMolStandardize.TautomerEnumerator()
 
 # v6 constants (baseline v4n: ALPHA, KRR from the fusion cell; ICE_LAM = GL_LAM = 1.0; v6_final.V6_WINDOW)
 V6 = dict(window=40, alpha=0.6, krr=3.0, ice_lam=1.0, gl_lam=1.0, rescore=True, fusion=True,
-          tail=('overflow', 'prefusion', 'ranker', 'eng2', 'pubchem'), pc_into_window=0)
+          tail=('overflow', 'prefusion', 'ranker', 'eng2', 'pubchem'), pc_into_window=0, sim='shipped')
 
 
 class Keys:
@@ -115,7 +115,8 @@ def final_lists(run, K, gl_fuse, ice_fuse, cfg):
             lo = min(scs) if scs else 0.0
             cands += add; scs += [lo - 1e-6 * (i + 1) for i in range(len(add))]
         keys = [K.key(s) or s for s in cands]
-        gl, ice = nonempty(run['gl'], mid), nonempty(run['ice'], mid)
+        sk = '_mce' if cfg.get('sim') == 'mce' else ''        # --both-ce runs: multi-energy simulator scores
+        gl, ice = nonempty(run['gl' + sk], mid), nonempty(run['ice' + sk], mid)
         if cfg['rescore'] and gl and len(cands) > 1:
             o = gl_fuse.rerank_multi(cands, keys, scs, [K.formula(s) for s in cands], [{}, gl],
                                      [cfg['ice_lam'], cfg['gl_lam']], top_n=len(cands))
@@ -161,6 +162,7 @@ def load_run(d):
     return dict(pre=csv('sub_v4.csv'), final=csv('sub_final.csv'), eng=j('eng_lists.json'),
                 pc=j('pc_lists_v6.json') or j('pc_lists.json'),
                 base=j('base_pre_ice.json'), gl=j('gl_scores.json'), ice=j('ice_scores.json'),
+                gl_mce=j('gl_scores_mce.json'), ice_mce=j('ice_scores_mce.json'),   # --both-ce runs
                 q=pd.read_parquet(os.path.join(d, 'queries.parquet')))
 
 
