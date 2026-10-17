@@ -233,7 +233,24 @@ def _arm_multi_ce(tail):
     return tail
 
 
-AB_ARMS = {'multi_ce': _arm_multi_ce}
+GL_ICE_EDITS = (   # E006's final passes re-score with GLACIER alone ([{}, gl]); arm B adds ICEBERG at a junior weight
+    ("[{}, _gl], [ICE_LAM, GL_LAM]", "[_ice, _gl], [{lam}, GL_LAM]"),                               # v80 identity fusion
+    ('                [{}, gl],\n                [scope["ICE_LAM"], scope["GL_LAM"]],',
+     '                [ice, gl],\n                [{lam}, scope["GL_LAM"]],'),                       # E006 window-40 pass
+)
+
+
+def _arm_gl_ice(tail, lam=0.5):
+    """arm B = final re-score z(fusion) + lam * z(ICEBERG) + GL_LAM * z(GLACIER) where GLACIER has scores (E006: GLACIER
+    alone). timsTOF isomer bench, 208 natural products: GL + 0.5 ICE vs GL alone +0.025 [+0.008, +0.045]."""
+    for old, new in GL_ICE_EDITS:
+        hits = [i for i, c in enumerate(tail) if c['cell_type'] == 'code' and old in ''.join(c['source'])]
+        assert len(hits) == 1, f'GLACIER-only re-score not found exactly once: {old[:40]!r}'
+        tail[hits[0]] = code_cell(''.join(tail[hits[0]]['source']).replace(old, new.format(lam=lam)))
+    return tail
+
+
+AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice}
 
 
 def apply_ab(cells, arm):
