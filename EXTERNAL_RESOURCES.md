@@ -54,3 +54,16 @@ exempt from that grant. Foundational rules: no submission may infringe third-par
 
 Consequences for this repo: MIST's released weights (trained partly on NIST) are not usable; MVP (no licence file,
 trained on MassSpecGym) is probably acceptable under 748363 but should be asked about specifically before use.
+
+## E006 fork (from 2026-10-18)
+
+Base notebook: antriksharya/casmi26-e006-e2rank2 (public Kaggle notebook, Apache 2.0 by default), lineage canqiang
+(E006), flexonafft (v80 metric-identity fusion), samanyu1808 (ICEBERG where GLACIER is blind), obstacledeveloper (metric
+audit, safe tail), skomuro (PubChem promotion rule), dmitriigluzdov (popularity prior), prvsiyan / megayak (engine 2),
+ahmedberatozer (v4n engine, pool, models), ms-pred (ICEBERG / GLACIER).
+
+| Extra input vs our 0.401 baseline | Licence | Decision |
+|---|---|---|
+| eveliaveldrine/rdkit-wheels | Apache-2.0 (contents: RDKit 2025.3.6 BSD-3, numpy BSD, Pillow HPND, cp313) | kept (fallback for Python 3.13 images) |
+| hengck23/hengck23-dreams-enveda-casmi26 | MIT | dropped: unused by E006's code (optional dreams_np_*.npy files absent); DreaMS checkpoint training data unverified |
+
