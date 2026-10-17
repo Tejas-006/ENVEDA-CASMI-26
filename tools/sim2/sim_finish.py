@@ -1,0 +1,91 @@
+# sim2: save everything needed to re-rank offline, then print a quick MRR@25 (the full protocol is in casmi26-sim2-score)
+import json, shutil
+
+
+def _js(obj, path):
+    json.dump(obj, open(path, 'w'), default=lambda o: o.item() if hasattr(o, 'item') else str(o))
+
+
+_mids = [m for m in QUERIES.molecule_id if m in SIMD]
+if _mids:
+    np.savez_compressed(os.path.join(SIM_OUT, 'cands.npz'),
+                        molecule_id=np.concatenate([np.repeat(str(m), len(SIMD[m]['y'])) for m in _mids]),
+                        key=np.concatenate([SIMD[m]['keys'] for m in _mids]),
+                        smiles=np.concatenate([SIMD[m]['smiles'] for m in _mids]),
+                        X=np.concatenate([SIMD[m]['X'] for m in _mids]),
+                        score=np.concatenate([SIMD[m]['score'] for m in _mids]),
+                        y=np.concatenate([SIMD[m]['y'] for m in _mids]),
+                        n_all=np.array([SIMD[m]['n_all'] for m in _mids]), mols=np.array([str(m) for m in _mids]),
+                        names=np.array(SIM_NAMES or []))
+_js({str(k): v for k, v in BASE0.items()}, os.path.join(SIM_OUT, 'base_pre_ice.json'))
+_js({str(k): v for k, v in BASE_POST_ICE.items()}, os.path.join(SIM_OUT, 'base_post_ice.json'))
+_js({str(k): v for k, v in (ICE_SCORES or {}).items()}, os.path.join(SIM_OUT, 'ice_scores.json'))
+_js({str(k): v for k, v in (GL_SCORES or {}).items()}, os.path.join(SIM_OUT, 'gl_scores.json'))
+for _f in ['eng_lists.json', 'pc_lists.json']:
+    if os.path.exists(f'/kaggle/working/{_f}'):
+        shutil.copy(f'/kaggle/working/{_f}', os.path.join(SIM_OUT, _f))
+shutil.copy('submission.csv', os.path.join(SIM_OUT, 'sub_final.csv'))
+for _n in ('ICE_SCORES_MCE', 'GL_SCORES_MCE'):   # --both-ce: multi-energy simulator scores for the replay harness
+    if globals().get(_n):
+        _js({str(k): v for k, v in globals()[_n].items()}, os.path.join(SIM_OUT, _n.lower() + '.json'))
+if isinstance(globals().get('PC'), dict):   # PubChem lists as the v6 final step saw them (gated lists re-sorted by ICE/GL)
+    _js({str(k): v for k, v in PC.items()}, os.path.join(SIM_OUT, 'pc_lists_v6.json'))
+
+
+OFFICIAL_TRUTH = {m: official_key(s) for m, s in zip(QUERIES.molecule_id, QUERIES.smiles)}
+
+
+def _rr(sub_path, key_fn=official_key, truth=OFFICIAL_TRUTH):
+    s = pd.read_csv(sub_path)
+    out = {}
+    for mid, smi in zip(s.molecule_id, s.smiles):
+        t, r = truth.get(mid), 0.0
+        for i, x in enumerate(str(smi).split(';')[:25], 1):
+            if t and key_fn(x) == t:
+                r = 1.0 / i; break
+        out[mid] = r
+    return out
+
+
+_q = QUERIES.set_index('molecule_id')
+summary = dict(shard=SHARD, n_queries=len(QUERIES), secs=round(time.time() - T0), n_errors=n_err,
+               train_structs=STRUCT_FILTER, np_filter=NP_FILTER, ice_stats=ice_stats, gl_stats=gl_stats,
+               cand_recall=float(np.mean([SIMD[m]['y'].any() for m in _mids])) if _mids else None)
+for _name, _p in [('v4_pre_fusion', 'sub_v4.csv'), ('final', 'sub_final.csv')]:
+    rr = pd.Series(_rr(os.path.join(SIM_OUT, _p)))
+    cls = _q.sim_class.reindex(rr.index)
+    summary[_name] = dict(mrr=round(rr.mean(), 4), top1=round((rr == 1).mean(), 4),
+                          top5=round((rr >= 0.2).mean(), 4), recall25=round((rr > 0).mean(), 4),
+                          by_class={int(c): round(rr[cls == c].mean(), 4) for c in sorted(cls.dropna().unique())})
+    if 'in_pool' in _q.columns:
+        ip = _q.in_pool.reindex(rr.index).astype(bool)
+        summary[_name]['by_in_pool'] = {'in_pool': round(rr[ip].mean(), 4) if ip.any() else None,
+                                        'not_in_pool': round(rr[~ip].mean(), 4) if (~ip).any() else None}
+    old = pd.Series(_rr(os.path.join(SIM_OUT, _p), metric_key, TRUTH_KEY))   # pre-2026-10-15 scorer (no stereo removal)
+    summary[_name + '_oldkey'] = dict(mrr=round(old.mean(), 4), top1=round((old == 1).mean(), 4),
+                                      recall25=round((old > 0).mean(), 4))
+if os.path.exists(os.path.join(SIM_OUT, 'sub_final_A.csv')):      # --ab: paired arm A (unchanged) vs arm B (change)
+    _ra = pd.Series(_rr(os.path.join(SIM_OUT, 'sub_final_A.csv')))
+    _rb = pd.Series(_rr(os.path.join(SIM_OUT, 'sub_final.csv'))).reindex(_ra.index)
+    _d = (_rb - _ra).values
+    _bs = np.array([_d[np.random.default_rng(i).integers(0, len(_d), len(_d))].mean() for i in range(2000)])
+    _m = lambda r: dict(mrr=round(r.mean(), 4), top1=round((r == 1).mean(), 4), recall25=round((r > 0).mean(), 4))
+    summary['ab'] = dict(arm_b=globals().get('AB_ARM_LABEL'), A=_m(_ra), B=_m(_rb), delta=round(float(_d.mean()), 4),
+                         ci95=[round(float(np.percentile(_bs, 2.5)), 4), round(float(np.percentile(_bs, 97.5)), 4)],
+                         better=int((_d > 0).sum()), worse=int((_d < 0).sum()))
+    if 'ion_mode' in _q.columns:                                   # e.g. negative-mode questions separately
+        _neg = _q.ion_mode.reindex(_ra.index).astype(str).str.contains('negative')
+        summary['ab']['by_mode'] = {k: dict(n=int(msk.sum()), A=round(_ra[msk].mean(), 4), B=round(_rb[msk].mean(), 4))
+                                    for k, msk in (('has_negative', _neg), ('positive_only', ~_neg)) if msk.any()}
+summary['scorer'] = 'official_key (stereo removed, canonical tautomer, InChIKey-14); *_oldkey = metric_key'
+summary['source'] = SOURCE
+if 'in_pool' in _q.columns:
+    summary['truth_in_pool'] = round(float(_q.in_pool.mean()), 4)
+_js(summary, os.path.join(SIM_OUT, 'summary.json'))
+print(json.dumps(summary, indent=1, default=str))
+print('sim_out files:', sorted(os.listdir(SIM_OUT)))
+
+# keep the saved output small: drop helper installs/caches the pipeline leaves in /kaggle/working
+for _d in ['ice_site', 'eng', 'gl_work', 'ice_work', '__pycache__', 'numba_cache', 'work', 'smoke_comp']:
+    shutil.rmtree(os.path.join('/kaggle/working', _d), ignore_errors=True)
+print('kept outputs:', sorted(os.listdir('/kaggle/working')))
