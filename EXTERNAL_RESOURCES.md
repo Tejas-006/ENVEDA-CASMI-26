@@ -67,3 +67,4 @@ ahmedberatozer (v4n engine, pool, models), ms-pred (ICEBERG / GLACIER).
 | eveliaveldrine/rdkit-wheels | Apache-2.0 (contents: RDKit 2025.3.6 BSD-3, numpy BSD, Pillow HPND, cp313) | kept (fallback for Python 3.13 images) |
 | hengck23/hengck23-dreams-enveda-casmi26 | MIT | dropped: unused by E006's code (optional dreams_np_*.npy files absent); DreaMS checkpoint training data unverified |
 
+| tools/lb/frag_gap.py (vendored) | public notebook antriksharya/casmi26-lb-0-443-v7c-engine-2-rank-2-insert, cell 32 | 2026-10-18 copy | Apache-2.0 (frag_rescore.py credited to Huseyin Emre Aksoy) | A/B arm `frag_gap`: MetFrag-lite re-rank for molecules without simulator coverage |

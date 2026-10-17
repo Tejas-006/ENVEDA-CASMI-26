@@ -250,7 +250,31 @@ def _arm_gl_ice(tail, lam=0.5):
     return tail
 
 
-AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice}
+E006_PASS_MARK = 'def _factorial_entry(scope):'
+FRAG_BRANCH_AT = '        elif ice_fallback and ice and not gl:\n'
+FRAG_BRANCH = '''        elif (ice_fallback and not gl and scope.get("FRAG_GAP", {}).get(mid)
+              and not any(v is not None for v in (ice or {}).values())):
+            # v7c: no forward-model evidence at all -> MetFrag-lite gap re-rank (lambda 0.5), once
+            order = scope["gl_fuse"].rerank_multi(
+                candidates, keys, scores, [scope["_form2"](s) for s in candidates],
+                [scope["FRAG_GAP"][mid]], [0.5], top_n=len(candidates))
+            candidates = [candidates[i] for i in order]
+            audit["branch"] = "frag_gap"
+'''
+
+
+def _arm_frag_gap(tail):
+    """arm B = v7c's MetFrag-lite re-rank (tools/lb/frag_gap.py) for molecules with no GLACIER and no finite ICEBERG
+    scores (mostly negative mode), as one extra branch of the E006 window-40 pass (public 0.443 notebook's change)."""
+    i = find_cell(tail, E006_PASS_MARK)
+    src = ''.join(tail[i]['source'])
+    assert src.count(FRAG_BRANCH_AT) == 1, 'ICE-fallback branch not found in the E006 pass'
+    tail[i] = code_cell(src.replace(FRAG_BRANCH_AT, FRAG_BRANCH + FRAG_BRANCH_AT))
+    tail.insert(i, code_cell(open(os.path.join(HERE, 'lb', 'frag_gap.py'), encoding='utf-8').read()))
+    return tail
+
+
+AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice, 'frag_gap': _arm_frag_gap}
 
 
 def apply_ab(cells, arm):
