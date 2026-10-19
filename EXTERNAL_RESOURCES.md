@@ -4,38 +4,49 @@ Each must be public and free to all participants. "TODO" items are unverified: f
 
 | Resource | Source | Version / ID | Licence | Used for |
 |---|---|---|---|---|
-| RDKit | https://www.rdkit.org | wheel in Kaggle input (TODO version) | BSD-3-Clause | Chemistry toolkit |
-| LightGBM | https://github.com/microsoft/LightGBM | TODO | MIT | Candidate ranker |
-| PubChem | https://pubchem.ncbi.nlm.nih.gov | TODO snapshot date | Public domain (NCBI) | PubChem candidate channel, popularity prior |
+| RDKit | https://www.rdkit.org | 2026.03.3 (main notebook, `metric/rdkit-2026-3-3-wheel`, asserted by E006); 2025.03.6 inside the ICEBERG / GLACIER subprocesses (their bundled wheel) | BSD-3-Clause | Chemistry toolkit |
+| LightGBM | https://github.com/microsoft/LightGBM | the pinned Kaggle image's build (image `gcr.io/kaggle-private-byod/python@sha256:37c64f7d...`; exact version not printed yet) | MIT | Candidate ranker |
+| PubChem | https://pubchem.ncbi.nlm.nih.gov | via `ahmedberatozer/casmi26-pubchem-tier` (dataset of 2026-09-23: CID-SMILES + CID-Mass, ~106M structures) and `dmitriigluzdov/casmi26-pubchem-popularity-prior` | Public domain (NCBI) | PubChem candidate channel, popularity prior |
 | DreaMS | https://github.com/pluskal-lab/DreaMS, https://zenodo.org/records/10997887 | Zenodo 10997887 | MIT | DreamsFP feature views inside the baseline's fe_v4 (not used by our own code) |
-| ICEBERG (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | TODO version used by casmi26-iceberg | MIT | Post-ranker isomer re-scoring |
-| GLACIER (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | TODO version used by casmi26-glacier | MIT | Post-ranker re-scoring |
-| prvsiyan public Kaggle notebook (2026-09-16) | TODO notebook URL | 2026-09-16 | TODO (Kaggle notebook licence) | Analog-propagation engine components |
+| ICEBERG (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | ICEBERG 2.1, MassSpecGym `msg_all` checkpoint (per `ahmedberatozer/casmi26-iceberg`, 2026-09-26) | MIT | Post-ranker isomer re-scoring |
+| GLACIER (ms-pred) | https://github.com/coleygroup/ms-pred (MassSpecGym-trained weights linked in its README) | MassSpecGym checkpoint, stripped (per `ahmedberatozer/casmi26-glacier`, 2026-09-28) | MIT | Post-ranker re-scoring ([M+H]+ only) |
+| prvsiyan public Kaggle notebook (2026-09-16) | https://www.kaggle.com/code/prvsiyan/analog-propagation-casmi-2026-baseline | 2026-09-16 | Apache-2.0 (Kaggle default for public notebooks) | Analog-propagation engine components (engine 2) |
 | CMatch (ours) | tools/cmatch/ in this repo | trained by casmi26-cmatch-train | n/a (own code; trained only on Competition Data) | Contrastive spectrum↔molecule score |
 | MassSpecGym | https://huggingface.co/datasets/roman-bushuiev/MassSpecGym (downloaded by casmi26-massspecgym-download into private dataset casmi26-massspecgym) | HF revision d2e86d0c3bd905a6d578c0dd6053ed2bd41f9c2a, data/MassSpecGym.tsv (231,104 spectra, 28,929 compounds) | MIT | sim2 practice questions: only compounds NOT in competition train (inchikey14 + tautomer-key dedupe) |
 | Enveda-180 public release | https://zenodo.org/records/21346580 | Zenodo 21346580 (enveda-180.parquet.gz) | CC BY 4.0 | sim2 practice questions: timsTOF spectra of compounds NOT in competition train (host: allowed, discussion 745148 / 743569) |
 | CASMI 2016 / 2022 contest data (via MassFormer data release) | https://zenodo.org/records/8399738 | casmi_2016.tgz, casmi_2022.tgz | CC BY 4.0 | planned: extra sim2 practice questions (not yet downloaded) |
+| MS2DeepScore 2.11 + dual-mode model | https://github.com/matchms/ms2deepscore, https://zenodo.org/records/17826815 | ms2deepscore 2.11.0; model v1 (2025-12-05, for MS2DeepScore >= 2.6) | Apache-2.0 (code), CC BY 4.0 (model); trained on GNPS / MoNA / MassBank / MSnLib, no NIST | evaluated offline only (`casmi26-ms2ds-package`, `casmi26-ms2ds-eval`); **not in any submission** |
+| GNPS / MassBank / MoNA newer releases | GNPS ALL_GNPS_NO_PROPOGATED (export 2026-03-29), MassBank-data release 2026.03, MoNA predefined export | see `casmi26-newer-libraries` report | GNPS community CC0; MoNA CC BY; MassBank per record (host: CC BY-SA and NC fine) | counted only (2,248 not-in-train compounds with usable MS2, 0 timsTOF); **not in any submission** |
+| DiffMS (desk check) | https://github.com/coleygroup/DiffMS, https://zenodo.org/records/15122968 | — | MIT (code + weights) | not downloaded, not used (EXPERIMENTS.md 2026-10-19) |
 
-## Kaggle inputs of the 0.401 baseline (public datasets by other participants; from kernel-metadata.json)
+## Kaggle inputs of the E006 fork (public datasets by other participants; from kernel-metadata.json)
 
-The baseline is a fork of a public notebook; its inputs are public Kaggle datasets. TODO: record each dataset's licence (dataset page → Licence).
+Licences and last-update dates read with `kaggle datasets metadata` / `kaggle datasets list` on 2026-10-20. All are
+public and free. CC BY-NC-SA and "other" are acceptable per the host (discussion/748363) and are exempt from the MIT
+winner grant (Rules section 6). Submitted notebook versions keep the dataset versions attached when they were pushed;
+**a new push attaches the latest version** (see the popularity-prior note).
 
-| Kaggle dataset | Used for |
-|---|---|
-| ahmedberatozer/casmi26-v4b-models | v1 engine code, fe_v4 models, LightGBM ranker, MANIFEST.json |
-| ahmedberatozer/casmi26-v3-models | PubChem channel code + FPNet A+B |
-| ahmedberatozer/casmi26-v2-pool | Candidate pool (train ∪ COCONUT) and train-structure tables |
-| ahmedberatozer/casmi26-pubchem-tier | PubChem SMILES/fingerprints for the PubChem channel |
-| ahmedberatozer/casmi26-iceberg | ICEBERG re-scoring package |
-| ahmedberatozer/casmi26-glacier | GLACIER re-scoring package |
-| ahmedberatozer/casmi26-fpnet-full1 | Engine FPNet bank (fpnet_full1.pt) |
-| prvsiyan/casmi26-fp-models-v2 | Engine-2 fingerprint models |
-| prvsiyan/casmi26-ranker-features | Engine-2 ranker training rows (rank_train.npz) |
-| prvsiyan/coconut-casmi26-candidates | COCONUT 2.0 candidates + fingerprints |
-| prvsiyan/chebi-lipidmaps-casmi26 | ChEBI + LIPID MAPS candidates |
-| megayak/casmi26-simulated-ranker-rows | Engine-2 simulation rows (sim_rank_rows_nofp.npz) |
-| dmitriigluzdov/casmi26-pubchem-popularity-prior | PubChem popularity prior |
-| metric/rdkit-2026-3-3-wheel | RDKit 2026.3.3 wheel |
+| Kaggle dataset | Licence | Last updated | Used for |
+|---|---|---|---|
+| ahmedberatozer/casmi26-v4b-models | other (code MIT; see LICENSE-NOTICE.txt) | 2026-09-26 | v1 engine code (`code/casmi`), fe_v4 models, LightGBM ranker, MANIFEST.json |
+| ahmedberatozer/casmi26-v3-models | other (code MIT) | 2026-09-23 | PubChem channel code + FPNet A+B |
+| ahmedberatozer/casmi26-v2-pool | other (data only; reading code MIT) | 2026-09-21 | Candidate pool (train ∪ COCONUT) and train-structure tables |
+| ahmedberatozer/casmi26-pubchem-tier | other (NCBI PubChem public data) | 2026-09-23 | PubChem SMILES/masses for the PubChem channel |
+| ahmedberatozer/casmi26-iceberg | other (ms-pred MIT) | 2026-09-26 | ICEBERG re-scoring package |
+| ahmedberatozer/casmi26-glacier | other (ms-pred MIT) | 2026-09-28 | GLACIER re-scoring package |
+| ahmedberatozer/casmi26-fpnet-full1 | other (weights; code MIT) | 2026-09-29 | Engine FPNet bank (fpnet_full1.pt) |
+| prvsiyan/casmi26-fp-models-v2 | CC BY-NC-SA 4.0 | 2026-09-16 | Engine-2 fingerprint models |
+| prvsiyan/casmi26-ranker-features | CC BY-NC-SA 4.0 | 2026-09-17 | Engine-2 ranker training rows (rank_train.npz) |
+| prvsiyan/coconut-casmi26-candidates | CC BY-NC-SA 4.0 | 2026-09-15 | COCONUT 2.0 candidates + fingerprints |
+| prvsiyan/chebi-lipidmaps-casmi26 | CC BY-NC-SA 4.0 | 2026-09-16 | ChEBI + LIPID MAPS candidates |
+| megayak/casmi26-simulated-ranker-rows | CC0-1.0 | 2026-09-20 | Engine-2 simulation rows (sim_rank_rows_nofp.npz) |
+| dmitriigluzdov/casmi26-pubchem-popularity-prior | other | **2026-10-19 18:47 UTC** (all files re-uploaded) | PubChem popularity prior (popularity re-rank of base and PubChem lists) |
+| metric/rdkit-2026-3-3-wheel | unknown (RDKit itself BSD-3) | 2026-09-08 | RDKit 2026.3.3 wheel |
+| eveliaveldrine/rdkit-wheels | Apache-2.0 | 2026-10-04 | RDKit 2025.3.6 / numpy / Pillow cp313 wheels (fallback image) |
+
+**Popularity-prior update:** every submission up to 57404158 (pushed before 2026-10-19 18:47 UTC) used the previous
+version. The next push will attach the new one: before comparing a new submission with the earlier ones, check the
+log line `popularity re-ranked lists N` and diff its submission against a re-push of the unchanged E006 fork.
 
 ## Host clarifications on external data (competition forum, read 2026-10-17)
 

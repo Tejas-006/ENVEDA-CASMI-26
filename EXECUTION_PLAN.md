@@ -72,3 +72,24 @@ costs -0.008 on v11** (0.581 -> 0.574), so step 1 also checks which final-step p
 | E006 (2026-10-19) | rebased: LB **0.442**. On Enveda-180 (timsTOF, 400 q, paired): `gl_ice05` +0.011 [+0.005, +0.018], `frag_gap` +0.004 [+0.000, +0.009], multi-energy +0.001 (dropped). Combined LB notebook `casmi26-e006-glice-frag` built; shard-1 replication (350 new q) running |
 | LB 2026-10-19 | E006 + gl_ice05 + frag_gap: **0.435** vs E006 fork 0.442 (noise-level loss; 3rd failed simulator re-weighting). Final picks so far: E006 fork (LB-best) + E006 + gl_ice05 + frag_gap (practice-best). Simulator weights frozen |
 | 9, 11 (2026-10-19) | desk check done (EXPERIMENTS.md): 11 parked (DiffMS is the only usable generator, ~+0.004 expected); 9 viable (MS2DeepScore 2.x Apache-2.0, cross-mode, no NIST) -> candidate next model A/B |
+
+## Phase 2 (from 2026-10-20): scoped after the E006 rebase
+
+Base: E006 fork (LB 0.442). Tools: exact replay from the PubChem merge (`tools/replay/replay_e006_merge.py`), three
+practice runs (Enveda-180 s0 / s1, MassSpecGym). Every result is reported on all questions **and** on test-like
+questions ([M+H]+ / [M-H]-, ~95% of test spectra). New replay searches use **s0 + MassSpecGym to choose and s1 to
+confirm** (both Enveda-180 shards have already informed decisions, so a fresh confirmation set is the only guard
+against picking noise).
+
+| # | Experiment | Why | Gate / kill | Cost |
+|---|---|---|---|---|
+| P1 | **Final-pick candidate 2**: E006 + gl_ice 0.5 + frag_gap + strong-lib as one notebook, submitted once | Practice-best line (test-like replay +0.026 / +0.032 / +0.015 without frag_gap); final picks must be existing submissions | LB ≥ 0.42 (no breakage) | 20-min push + 1 submission (Tejas's OK) |
+| P2 | **Popularity-prior drift check**: E006 fork re-run on Enveda-180 s0 with the 2026-10-19 dataset version, paired against the saved run | Every future push attaches the new version; comparisons with older runs are invalid if it changes lists | identical lists → nothing to do; otherwise re-baseline the replay runs | ~1.5 GPU h |
+| P3 | **Replay search, merge and tail** (choose on s0 + MSG, confirm on s1): strong-lib with aggressive slots; 7 or 10 PubChem slots; PubChem earlier in the cell-27 tail fill; window 25 vs 40 in cell 24 | Recall leak: on test-like s0 questions PubChem holds 149 truths, the final list 130 | positive on s0 and MSG (test-like), then CI > 0 on s1; otherwise drop | minutes each, CPU |
+| P4 | **Stronger in-pool guard**: pool membership of the 957 QTOF not-in-train compounds from `casmi26-newer-libraries`; if ≥ 40% are in the pool, build `--source newlib` and run E006 once | MassSpecGym (103 q, ±0.02) is the weakest check and the one that keeps PubChem changes honest | in-pool share < 40% → stop | 15-min CPU check; then ~0.5 day + 1.5 GPU h |
+| P5 | **Compliance**: MANIFEST (sha256) of every file the final notebooks load, written by a CPU notebook over the E006 inputs | Winner obligations (Rules 2.8); EXTERNAL_RESOURCES TODOs are done | — | ~30 min |
+| P6 | **Negative mode** (16–19% of test): only if a cheap lever appears (frag_gap is already in P1; MS2DeepScore parked at +0.004 / +0.007) | E006 negative-mode MRR 0.33–0.40 on Enveda-180 | — | — |
+
+Stopped (with reasons in EXPERIMENTS.md): [M+NH4]+ fix (0.3% of test spectra), MS2DeepScore integration, learned
+generators, engine-2 re-weighting (practice-biased), PubChem-at-the-top rules (fail the MassSpecGym guard), simulator
+re-weighting on the LB-safe line.
