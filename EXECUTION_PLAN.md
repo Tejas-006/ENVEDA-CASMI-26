@@ -70,4 +70,5 @@ costs -0.008 on v11** (0.581 -> 0.574), so step 1 also checks which final-step p
 | 7 | **dropped** (2026-10-16): only 2 of 12 PubChem-held truths rank in the top 100 (35, 48). Remaining lever for that bucket = better PubChem ranking (fingerprint model), see step 10 |
 | 6, 8-11 | not started. Note: sim2 has no negative-mode questions (test ~19%) |
 | E006 (2026-10-19) | rebased: LB **0.442**. On Enveda-180 (timsTOF, 400 q, paired): `gl_ice05` +0.011 [+0.005, +0.018], `frag_gap` +0.004 [+0.000, +0.009], multi-energy +0.001 (dropped). Combined LB notebook `casmi26-e006-glice-frag` built; shard-1 replication (350 new q) running |
+| LB 2026-10-19 | E006 + gl_ice05 + frag_gap: **0.435** vs E006 fork 0.442 (noise-level loss; 3rd failed simulator re-weighting). Final picks so far: E006 fork (LB-best) + E006 + gl_ice05 + frag_gap (practice-best). Simulator weights frozen |
 | 9, 11 (2026-10-19) | desk check done (EXPERIMENTS.md): 11 parked (DiffMS is the only usable generator, ~+0.004 expected); 9 viable (MS2DeepScore 2.x Apache-2.0, cross-mode, no NIST) -> candidate next model A/B |
