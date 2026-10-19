@@ -45,10 +45,23 @@ class Cache:
         self.path, self.chem = path, chem
         self.d = json.load(open(path)) if path and os.path.exists(path) else {}
         self.n_new = 0
+        # RDKit can segfault on a rare structure (seen with 2026.09.1): the SMILES being keyed is written to a marker
+        # first, so a rerun after a crash records it as unparsable instead of crashing again
+        self.mark = path + '.inflight' if path else None
+        if self.mark and os.path.exists(self.mark):
+            bad = open(self.mark, encoding='utf-8').read()
+            if bad:
+                print('previous run crashed on', bad[:80], '-> treated as unparsable')
+                self.d[bad] = [None, None, None, None]
+            os.remove(self.mark)
 
     def _get(self, s):
         if s not in self.d:
             self.n_new += 1
+            if self.mark:
+                open(self.mark, 'w', encoding='utf-8').write(s)
+            if self.n_new % 2000 == 0:
+                self.save()
             ident = ik = form = None
             try:
                 m = Chem.MolFromSmiles(s) if isinstance(s, str) else None
@@ -62,6 +75,8 @@ class Cache:
             except (ValueError, RuntimeError, TypeError):
                 ident = ik = None
             self.d[s] = [ident, self.chem.score_key(s) if isinstance(s, str) else None, form, ik]
+            if self.mark:
+                open(self.mark, 'w').close()
         return self.d[s]
 
     def identity(self, s):
