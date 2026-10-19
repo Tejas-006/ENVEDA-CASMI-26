@@ -22,7 +22,7 @@ try:
         _mrows = [dict(path=p[len('/kaggle/input/'):], bytes=_mo.path.getsize(p), sha256=h) for p, h in zip(_mfiles, _mh_)]
         _mds = {}
         for r in _mrows:
-            k = '/'.join(r['path'].split('/')[:2]) if r['path'].startswith('datasets/') else r['path'].split('/')[0]
+            k = '/'.join(r['path'].split('/')[:3 if r['path'].startswith(('datasets/', 'competitions/')) else 1])
             _mds.setdefault(k, dict(files=0, bytes=0)); _mds[k]['files'] += 1; _mds[k]['bytes'] += r['bytes']
         _mj.dump(dict(created=_mt.strftime('%Y-%m-%d %H:%M:%S UTC', _mt.gmtime()), n_files=len(_mrows), datasets=_mds, files=_mrows),
                  open('/kaggle/working/input_manifest.json', 'w'), indent=0)
