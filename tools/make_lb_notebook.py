@@ -33,6 +33,7 @@ def main():
     ap.add_argument('--gl-ice', type=float, default=0.0, help='E006: add ICEBERG at this weight to the GLACIER-only re-scores')
     ap.add_argument('--frag-gap', action='store_true', help='E006: MetFrag-lite re-rank where no simulator has scores')
     ap.add_argument('--strong-lib-gentle', action='store_true', help='E006: PubChem gentle slots also for lib_max >= 0.9')
+    ap.add_argument('--no-manifest', action='store_true', help='skip the input sha256 manifest cell (push run only)')
     ap.add_argument('--slug', default='casmi26-v5-lb')
     a = ap.parse_args()
     nb = json.load(open(a.baseline))
@@ -73,6 +74,8 @@ def main():
         apply_strong_lib_gentle(cells)
         notes.append('PubChem gentle slots also for strong library matches (lib_max >= 0.9)')
     assert notes, 'choose at least one upgrade'
+    if not a.no_manifest:
+        cells.append(code_cell(open(os.path.join(HERE, 'lb', 'input_manifest.py'), encoding='utf-8').read()))
     base_label = ('E006 fork (antriksharya/casmi26-e006-e2rank2, LB 0.442)'
                   if any('E006: window=40' in ''.join(c['source']) for c in cells) else 'Baseline v4n (LB 0.401)')
     if base_label.startswith('E006'):

@@ -16,7 +16,9 @@ import replay_e006 as RE
 # cell 6 / cell 22 constants
 SLOTS_AGG, SLOTS_GENTLE = [2, 4, 6, 8, 10], [4, 8, 12, 16, 20]
 MERGE = dict(lib_tau=0.9, rel_th=600.0, s_tau=6.0, pop_tau=5.0, rel_promote=250.0, slots_agg=SLOTS_AGG, slots_gentle=SLOTS_GENTLE,
-             promote_all=False, pc_hedge=None, strong_lib='untouched')   # strong_lib: untouched | gentle (slots 4/8/.., no promotion) | full
+             promote_all=False, pc_hedge=None, strong_lib='untouched', strong_slots=None, fuse_n=40, tail_pc_early=False)
+# strong_lib: untouched | gentle (strong_slots or slots_gentle, no promotion); fuse_n: cell-24 fusion length;
+# tail_pc_early: cell-27 tail fill takes PubChem right after the fused overflow (E006: last)
 
 
 def merge(base, base_keys, pc, pc_keys, slots, n=25):
@@ -51,7 +53,7 @@ def merged_lists(R, m):
         elif lib_max >= m['lib_tau'] and m['strong_lib'] == 'untouched':
             final = smis
         elif lib_max >= m['lib_tau'] and m['strong_lib'] == 'gentle':
-            final = merge(smis, keys, p['pc'], p['pc_keys'], m['slots_gentle'])
+            final = merge(smis, keys, p['pc'], p['pc_keys'], m['strong_slots'] or m['slots_gentle'])
         else:
             bp = p.get('best_pool_fz')
             top_fz = p['fz_top'] if p.get('fz_top') is not None else p['pc_fz'][0]
@@ -79,13 +81,13 @@ def fuse2(K, v_smis, e_smis, e_keys, alpha=0.6, krr=3.0, n=40):
     return [smi_of[k] for k in order], order, [sc[k] for k in order]
 
 
-def cell24(R, K, gl_fuse, ice_fuse, pre):
+def cell24(R, K, gl_fuse, ice_fuse, pre, fuse_n=40):
     base_sub, overflow = {}, {}
     for mid, s in pre.items():
         vs = [x for x in s if x and x != 'CCO']
         e = R['eng'].get(mid)
         if e and e['smiles']:
-            fsm, fk, fsc = fuse2(K, vs, e['smiles'], e['keys'])
+            fsm, fk, fsc = fuse2(K, vs, e['smiles'], e['keys'], n=fuse_n)
             ice = R['ice'].get(mid, {}) or {}
             if ice:
                 try:
@@ -104,13 +106,14 @@ def cell24(R, K, gl_fuse, ice_fuse, pre):
     return base_sub, overflow
 
 
-def cell27(R, K, base_sub, overflow):
+def cell27(R, K, base_sub, overflow, pc_early=False):
     ref = {}
     for mid, original in base_sub.items():
         original = [s.strip() for s in original if s.strip()]
         clean = RE.safe_extend(K, original, [])
-        extras = list(overflow.get(mid, [])) + list(R['base_tail'].get(mid, [])) + list((R['eng'].get(mid) or {}).get('smiles', [])) \
-            + list((R['pc'].get(mid) or {}).get('pc', []))
+        ov, bt = list(overflow.get(mid, [])), list(R['base_tail'].get(mid, []))
+        en, pcl = list((R['eng'].get(mid) or {}).get('smiles', [])), list((R['pc'].get(mid) or {}).get('pc', []))
+        extras = ov + pcl + bt + en if pc_early else ov + bt + en + pcl
         ref[mid] = RE.safe_extend(K, clean, extras)
     return ref
 
@@ -128,8 +131,8 @@ def pc_hedge(K, toks, p, rank):
 
 def run_chain(R, K, gl_fuse, ice_fuse, m, final_cfg=None):
     pre = merged_lists(R, m)
-    base_sub, overflow = cell24(R, K, gl_fuse, ice_fuse, pre)
-    ref = cell27(R, K, base_sub, overflow)
+    base_sub, overflow = cell24(R, K, gl_fuse, ice_fuse, pre, m['fuse_n'])
+    ref = cell27(R, K, base_sub, overflow, m['tail_pc_early'])
     R2 = dict(R, prefusion=pre, reference=ref)
     fin, _ = RE.final_lists(R2, K, gl_fuse, ice_fuse, final_cfg or RE.E006)
     if m['pc_hedge']:
