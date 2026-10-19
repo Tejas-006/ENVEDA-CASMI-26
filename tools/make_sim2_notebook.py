@@ -274,6 +274,21 @@ def _arm_frag_gap(tail):
     return tail
 
 
+STRONG_LIB_AT = "    elif lib_max >= LIB_TAU:\n        stats['untouched'] += 1; final = smis\n"
+STRONG_LIB_NEW = ("    elif lib_max >= LIB_TAU:\n"
+                  "        # strong library match: PubChem-only structures still fill the gentle slots (4, 8, ..), never rank 1-3\n"
+                  "        stats['untouched'] += 1; final = merge(smis, keys, p['pc'], p['pc_keys'], SLOTS_GENTLE)\n")
+
+
+def apply_strong_lib_gentle(cells):
+    """E006 merge (cell 22): molecules with lib_max >= LIB_TAU get PubChem candidates in the gentle slots instead of none.
+    Replay (tools/replay/replay_e006_merge.py, exact on all three practice runs): Enveda-180 +0.003 / +0.003, MassSpecGym +0.010."""
+    hits = [i for i, c in enumerate(cells) if c['cell_type'] == 'code' and STRONG_LIB_AT in ''.join(c['source'])]
+    assert len(hits) == 1, 'strong-library branch of the PubChem merge not found exactly once'
+    cells[hits[0]] = code_cell(''.join(cells[hits[0]]['source']).replace(STRONG_LIB_AT, STRONG_LIB_NEW))
+    return cells
+
+
 AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice, 'frag_gap': _arm_frag_gap,
            'gl_frag': lambda tail: _arm_frag_gap(_arm_gl_ice(tail))}   # both (they touch disjoint molecules)
 

@@ -14,7 +14,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from make_sim2_notebook import (code_cell, find_cell, apply_v6, apply_pc_sim, apply_multi_ce, is_e006,  # noqa: E402
-                                _arm_gl_ice, _arm_frag_gap, CELL6_MARK, CELL9_MARK)
+                                _arm_gl_ice, _arm_frag_gap, apply_strong_lib_gentle, CELL6_MARK, CELL9_MARK)
 import make_kaggle_push  # noqa: E402
 
 NO_FUSION = "ENG = {}   # v5i: skip the final engine-2 fusion (sim2 external, 103 q: final 0.319 vs pre-fusion 0.362)\n"
@@ -32,6 +32,7 @@ def main():
     ap.add_argument('--multi-ce', action='store_true', help='score merged multi-energy spectra against merged predictions')
     ap.add_argument('--gl-ice', type=float, default=0.0, help='E006: add ICEBERG at this weight to the GLACIER-only re-scores')
     ap.add_argument('--frag-gap', action='store_true', help='E006: MetFrag-lite re-rank where no simulator has scores')
+    ap.add_argument('--strong-lib-gentle', action='store_true', help='E006: PubChem gentle slots also for lib_max >= 0.9')
     ap.add_argument('--slug', default='casmi26-v5-lb')
     a = ap.parse_args()
     nb = json.load(open(a.baseline))
@@ -60,14 +61,17 @@ def main():
     if a.multi_ce:
         apply_multi_ce(cells)
         notes.append('merged multi-energy spectra scored against merged ICEBERG/GLACIER predictions')
-    if a.gl_ice or a.frag_gap:
-        assert is_e006(cells), '--gl-ice / --frag-gap edit the E006 final passes'
+    if a.gl_ice or a.frag_gap or a.strong_lib_gentle:
+        assert is_e006(cells), '--gl-ice / --frag-gap / --strong-lib-gentle edit E006 cells'
     if a.gl_ice:
         _arm_gl_ice(cells, a.gl_ice)
         notes.append(f'ICEBERG at weight {a.gl_ice:g} next to GLACIER in the final re-scores')
     if a.frag_gap:
         _arm_frag_gap(cells)
         notes.append('MetFrag-lite re-rank for molecules without simulator scores (v7c)')
+    if a.strong_lib_gentle:
+        apply_strong_lib_gentle(cells)
+        notes.append('PubChem gentle slots also for strong library matches (lib_max >= 0.9)')
     assert notes, 'choose at least one upgrade'
     base_label = ('E006 fork (antriksharya/casmi26-e006-e2rank2, LB 0.442)'
                   if any('E006: window=40' in ''.join(c['source']) for c in cells) else 'Baseline v4n (LB 0.401)')
