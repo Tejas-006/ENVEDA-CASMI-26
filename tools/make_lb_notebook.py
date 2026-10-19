@@ -1,6 +1,7 @@
 """Build a leaderboard-track submission notebook = the 0.401 baseline + selected upgrades, and its push folder.
 
-usage: python tools/make_lb_notebook.py <baseline.ipynb> <baseline kernel-metadata.json> <out_dir> [--cmatch] [--no-fusion] [--v6] [--slug S]
+usage: python tools/make_lb_notebook.py <baseline.ipynb> <baseline kernel-metadata.json> <out_dir> [--cmatch] [--no-fusion] [--v6]
+       [--gl-ice LAM] [--frag-gap] [--slug S]
 
 The output contains the baseline's code: never commit it (this repo is public).
 """
@@ -12,7 +13,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from make_sim2_notebook import code_cell, find_cell, apply_v6, apply_pc_sim, apply_multi_ce, CELL6_MARK, CELL9_MARK  # noqa: E402
+from make_sim2_notebook import (code_cell, find_cell, apply_v6, apply_pc_sim, apply_multi_ce, is_e006,  # noqa: E402
+                                _arm_gl_ice, _arm_frag_gap, CELL6_MARK, CELL9_MARK)
 import make_kaggle_push  # noqa: E402
 
 NO_FUSION = "ENG = {}   # v5i: skip the final engine-2 fusion (sim2 external, 103 q: final 0.319 vs pre-fusion 0.362)\n"
@@ -28,6 +30,8 @@ def main():
     ap.add_argument('--v6', action='store_true')
     ap.add_argument('--pc-sim', type=int, default=0, help='step 5: PubChem top-K through ICE/GL and into the v6 window')
     ap.add_argument('--multi-ce', action='store_true', help='score merged multi-energy spectra against merged predictions')
+    ap.add_argument('--gl-ice', type=float, default=0.0, help='E006: add ICEBERG at this weight to the GLACIER-only re-scores')
+    ap.add_argument('--frag-gap', action='store_true', help='E006: MetFrag-lite re-rank where no simulator has scores')
     ap.add_argument('--slug', default='casmi26-v5-lb')
     a = ap.parse_args()
     nb = json.load(open(a.baseline))
@@ -56,6 +60,14 @@ def main():
     if a.multi_ce:
         apply_multi_ce(cells)
         notes.append('merged multi-energy spectra scored against merged ICEBERG/GLACIER predictions')
+    if a.gl_ice or a.frag_gap:
+        assert is_e006(cells), '--gl-ice / --frag-gap edit the E006 final passes'
+    if a.gl_ice:
+        _arm_gl_ice(cells, a.gl_ice)
+        notes.append(f'ICEBERG at weight {a.gl_ice:g} next to GLACIER in the final re-scores')
+    if a.frag_gap:
+        _arm_frag_gap(cells)
+        notes.append('MetFrag-lite re-rank for molecules without simulator scores (v7c)')
     assert notes, 'choose at least one upgrade'
     base_label = ('E006 fork (antriksharya/casmi26-e006-e2rank2, LB 0.442)'
                   if any('E006: window=40' in ''.join(c['source']) for c in cells) else 'Baseline v4n (LB 0.401)')

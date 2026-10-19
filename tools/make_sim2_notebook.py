@@ -274,7 +274,8 @@ def _arm_frag_gap(tail):
     return tail
 
 
-AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice, 'frag_gap': _arm_frag_gap}
+AB_ARMS = {'multi_ce': _arm_multi_ce, 'gl_ice05': _arm_gl_ice, 'frag_gap': _arm_frag_gap,
+           'gl_frag': lambda tail: _arm_frag_gap(_arm_gl_ice(tail))}   # both (they touch disjoint molecules)
 
 
 def apply_ab(cells, arm):
